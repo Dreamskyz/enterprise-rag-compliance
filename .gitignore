@@ -1,0 +1,37 @@
+# Python 虚拟环境
+.venv/
+venv/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# PyCharm
+.idea/
+
+# 环境变量与密钥
+.env
+
+# 测试 / 静态检查缓存
+.pytest_cache/
+.ruff_cache/
+
+# 构建产物
+build/
+dist/
+*.egg-info/
+
+# 日志
+*.log
+logs/
+
+# 本地模型缓存
+models/
+
+# 原始数据与处理后的知识库数据
+data/raw/*
+data/processed/*
+
+# 保留目录本身
+!data/raw/.gitkeep
+!data/processed/.gitkeep

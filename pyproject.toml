@@ -1,0 +1,22 @@
+#setuptools工具进行构建和安装
+#setuptools 是 Python 的构建/打包工具
+#pip 负责安装，setuptools 负责告诉 pip 项目怎么构建
+#[build-system] 描述构建项目需要什么；[project].dependencies 描述运行项目需要什么
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+#定义项目本身
+[project]
+name = "enterprise-rag-compliance"
+version = "0.1.0"
+description = "企业 AI 合规与应用规范 RAG 助手"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+#依赖
+dependencies = []
+
+#表示让 setuptools 去 src/ 下寻找我们的 Python 包
+[tool.setuptools.packages.find]
+where = ["src"]
