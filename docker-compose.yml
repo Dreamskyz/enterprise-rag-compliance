@@ -1,0 +1,22 @@
+services:                                                 #这个项目有哪些基础设施服务。
+  qdrant:
+    image: qdrant/qdrant:latest                           #镜像，当前开发阶段使用 latest 没问题
+    container_name: enterprise-rag-qdrant                 #Docker 可能产生自动名称，所以固定名称
+
+    ports:
+      # Qdrant REST API + Dashboard                       #6333 → REST / HTTP / Web UI   更直观、更容易调试
+      - "6333:6333"                                       #宿主机端口 : Container 端口
+
+      # Qdrant gRPC API
+      - "6334:6334"                                       #6334 → gRPC    更偏性能优化场景
+
+    volumes:
+      # 使用 Docker Named Volume。
+      # Windows 下比直接绑定宿主机目录更加稳妥。
+      - qdrant_storage:/qdrant/storage                    #Container内/qdrant/storage是 Qdrant数据位置 Docker 给它连接了qdrant_storage
+
+    restart: unless-stopped                               #Docker 重新启动时，尽量自动恢复这个 Container，除非用户明确停止它
+
+
+volumes:
+  qdrant_storage:
