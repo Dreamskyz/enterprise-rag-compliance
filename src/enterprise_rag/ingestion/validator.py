@@ -155,5 +155,5 @@ def validate_chunks(
                 f"实际={indices}，"
                 f"期望={expected_indices}"
             )
-            
+
     return errors
