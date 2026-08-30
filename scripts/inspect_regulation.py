@@ -13,8 +13,8 @@ from enterprise_rag.ingestion.regulation_parser import (
 
 def main() -> None:
     path = Path(
-        #"data/raw/cn_genai_interim_2023.html"
-        "data/raw/cn_deep_synthesis_2022.html"
+        "data/raw/cn_genai_interim_2023.html"
+        #"data/raw/cn_deep_synthesis_2022.html"
     )
 
     article_text = extract_cac_article(path)

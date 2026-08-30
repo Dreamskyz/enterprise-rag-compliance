@@ -21,6 +21,11 @@ dependencies = [
     "PyYAML>=6.0,<7.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+]
+
 #表示让 setuptools 去 src/ 下寻找我们的 Python 包
 [tool.setuptools.packages.find]
 where = ["src"]

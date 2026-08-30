@@ -31,7 +31,13 @@ def build_normalized_document(
     return NormalizedDocument(
         document_id=manifest.document_id,
         title=manifest.title,
+
+        document_type=manifest.document_type,
+        language=manifest.language,
+        version=manifest.version,
+
         text=normalized_text,
+
         source_url=manifest.source_url,
         access_level=manifest.access_level,
     )
