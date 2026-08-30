@@ -1,0 +1,26 @@
+documents:
+  - document_id: cn_genai_interim_2023
+    title: 生成式人工智能服务管理暂行办法
+    source_url: https://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm
+    source_type: official
+    document_type: regulation
+    language: zh-CN
+    version: "2023"
+    published_at: "2023-07-13"
+    effective_at: "2023-08-15"
+    access_level: public
+    local_path: data/raw/cn_genai_interim_2023.html
+    enabled: true
+
+  - document_id: cn_deep_synthesis_2022
+    title: 互联网信息服务深度合成管理规定
+    source_url: https://www.cac.gov.cn/2022-12/11/c_1672221949354811.htm
+    source_type: official
+    document_type: regulation
+    language: zh-CN
+    version: "2022"
+    published_at: "2022-12-11"
+    effective_at: "2023-01-10"
+    access_level: public
+    local_path: data/raw/cn_deep_synthesis_2022.html
+    enabled: true

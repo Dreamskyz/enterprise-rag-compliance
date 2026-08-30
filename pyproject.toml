@@ -15,7 +15,11 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 
 #依赖
-dependencies = []
+dependencies = [
+    "httpx>=0.27,<1.0",
+    "beautifulsoup4>=4.12,<5.0",
+    "PyYAML>=6.0,<7.0",
+]
 
 #表示让 setuptools 去 src/ 下寻找我们的 Python 包
 [tool.setuptools.packages.find]
