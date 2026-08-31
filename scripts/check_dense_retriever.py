@@ -84,33 +84,33 @@ def main() -> None:
 
         print(
             "Chunk ID:",
-            result.chunk_id,
+            result.candidate.chunk_id,
         )
 
         print(
             "Title:",
-            result.title,
+            result.candidate.title,
         )
 
         print(
             "Chapter:",
-            result.chapter_number,
-            result.chapter_title,
+            result.candidate.chapter_number,
+            result.candidate.chapter_title,
         )
 
         print(
             "Article:",
-            result.article_number,
+            result.candidate.article_number,
         )
 
         print(
             "Access Level:",
-            result.access_level,
+            result.candidate.access_level,
         )
 
         print(
             "Content:",
-            result.content[:200],
+            result.candidate.content[:200],
         )
 
         print("-" * 80)
@@ -127,15 +127,15 @@ def main() -> None:
     top1 = results[0]
 
     if (
-        top1.document_id
+        top1.candidate.document_id
         != "cn_genai_interim_2023"
-        or top1.article_number
+        or top1.candidate.article_number
         != "第七条"
     ):
         raise RuntimeError(
             "Dense Retrieval Top 1 "
             "与预期基线不一致："
-            f"{top1.chunk_id}"
+            f"{top1.candidate.chunk_id}"
         )
 
     print()
