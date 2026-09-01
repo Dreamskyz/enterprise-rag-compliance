@@ -25,6 +25,8 @@ dependencies = [
     "rank-bm25>=0.2,<1.0",
     "openai>=1.0,<3.0",
     "python-dotenv>=1.0,<2.0",
+    "fastapi",
+    "uvicorn[standard]",
 ]
 
 [project.optional-dependencies]

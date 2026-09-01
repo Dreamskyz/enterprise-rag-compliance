@@ -2,123 +2,103 @@
 
 企业 AI 合规与应用规范助手。
 
-面向企业内部 RAG / Agent 研发人员、管理员等用户，围绕生成式人工智能合规法规、AI 安全规范与内部技术规范，构建一个可检索、可引用、可拒答、可评测的企业知识库助手。
+面向企业内部 RAG / Agent 研发人员和管理员，基于公开法规与技术规范提供：
 
-> 🚧 当前项目仍处于开发阶段。  
-> 已完成基础工程、法规类文档 Ingestion Pipeline，以及 Dense + BM25 + RRF + Reranker 检索主链路。  
-> ACL、Evidence Gate、LLM Generation、Citation、API、UI 与 Evaluation 正在后续阶段实现。
+- 可追溯的知识库检索；
+- ACL 权限过滤；
+- 混合检索与精排；
+- 基于证据的回答；
+- 无充分依据时拒答；
+- 确定性 Citation。
 
----
-
-## Project Goals
-
-本项目不是通用聊天机器人，而是一个面向企业 AI 合规与应用规范场景的 RAG 系统。
-
-核心目标：
-
-- 基于真实公开法规与技术规范构建知识库；
-- 通过结构化 Ingestion 保留文档原始语义边界；
-- 使用 Dense Retrieval 与 BM25 建立互补召回能力；
-- 使用 RRF 融合不同检索通路；
-- 使用 Cross-Encoder Reranker 提升候选精排质量；
-- 回答尽量基于检索证据，降低无依据生成；
-- 在缺乏充分检索证据时支持拒答；
-- 后续支持 ACL 检索权限过滤；
-- 支持 Retrieval / Generation 自动评测与消融实验；
-- 核心模块保持可独立测试、解释和替换。
-
-项目强调：
-
-```text
-不是：
-一个 LangChain Chain 包住所有逻辑
-
-而是：
-Ingestion
-Embedding
-Dense Retrieval
-BM25
-RRF
-Reranker
-ACL
-Evidence Gate
-Generation
-Evaluation
-
-各层职责明确、可独立验证
-```
+> 当前项目为个人完成的校招作品级 RAG 工程骨架，重点展示可解释的 Retrieval、ACL、Evidence Control、Generation 与 Evaluation 设计，而不是构建大规模生产平台。
 
 ---
 
-## Current Progress
+## Status
 
-### ✅ 已完成
+🚧 Under development
 
-#### Project Bootstrap
+当前已完成：
 
-- Python 3.11 + `src/` 工程结构
-- `pyproject.toml` 项目与依赖管理
-- `.env` / `.gitignore` 环境变量与密钥隔离
-- Docker Compose 启动 Qdrant
-- Docker Named Volume 数据持久化
-- pytest 单元测试与回归测试
+- 法规 HTML 数据清洗与结构化解析；
+- Structure-aware Chunking；
+- BGE-M3 Dense Retrieval；
+- BM25 Sparse Retrieval；
+- RRF Hybrid Retrieval；
+- bge-reranker-v2-m3 精排；
+- Retrieval-time ACL；
+- Evidence Gate 实验；
+- Evidence-Constrained Generation；
+- Structured Refusal；
+- Deterministic Citation；
+- QueryService；
+- FastAPI Runtime；
+- `/health`；
+- `/ready`；
+- `/api/v1/retrieve`；
+- `/api/v1/ask`。
 
-#### Data Ingestion
+后续计划：
 
-- Document Manifest 文档清单
-- 国家网信办 HTML 正文抽取
-- 文本 Normalizer
-- 法规章节 / 条款结构解析
-- Structure-aware Chunking
-- `KnowledgeChunk` 标准数据模型
-- `chunks.jsonl` 标准中间数据格式
-- Chunk 数据质量校验
+- 扩充法规 / OWASP / 技术规范语料；
+- 构建正式 Evaluation Dataset；
+- 检索消融实验；
+- Evidence Gate 阈值正式标定；
+- RAG 回答质量与拒答能力评测；
+- Streamlit Demo；
+- 完善 README 实验表与架构图。
 
-#### Embedding & Vector Index
+---
 
-- PyTorch + CUDA 本地 GPU 环境
-- BGE-M3 本地 Dense Embedding
-- FP16 GPU 推理
--真实 Chunk Token 长度分析
-- Qdrant Collection
-- Stable Point ID
-- Vector Upsert
-- Payload Metadata
-- Vector / Chunk 对齐校验
+## Project Goal
 
-#### Retrieval
+项目目标不是构建“万能知识库”。
 
-- BGE-M3 + Qdrant Dense Retrieval
-- Jieba + BM25 Sparse Retrieval
-- Reciprocal Rank Fusion（RRF）
-- `bge-reranker-v2-m3` Cross-Encoder 精排
-- Dense / BM25 / RRF / Reranker 分层实现
-- Brute-force Dense 与 Qdrant Dense 一致性验证
-- Retrieval latency 本地观测
-- RRF 与 Rerank 纯逻辑自动测试
+当前系统聚焦：
 
-### 🚧 下一阶段
+**企业 AI 合规与应用规范**
 
-- ACL-aware Retrieval
-- Qdrant Payload Filter
-- Evidence Gate
-- LLM Generation
-- Citation
-- Refusal
-- QueryService
-- FastAPI API
-- Streamlit UI
-- Retrieval Evaluation
-- Generation Evaluation
-- Ablation Study
+知识来源以真实公开文档为主，包括：
+
+- 《生成式人工智能服务管理暂行办法》；
+- 《互联网信息服务深度合成管理规定》；
+- 后续计划加入 OWASP Top 10 for LLM Applications；
+- 少量 FastAPI / Qdrant 官方文档作为内部技术规范样例。
+
+核心产品原则：
+
+> 无充分知识库依据时，不强行生成答案。
+
+---
+
+## Tech Stack
+
+- Python 3.11
+- FastAPI
+- Qdrant
+- BGE-M3
+- BM25Okapi
+- Jieba
+- RRF
+- bge-reranker-v2-m3
+- SiliconFlow OpenAI-compatible API
+- DeepSeek-V4-Flash
+- PyTorch + CUDA
+- Docker
+- Pytest
+
+当前本地开发环境：
+
+- Windows
+- RTX 4060 Laptop GPU
+- 32 GB RAM
 
 ---
 
 ## Architecture
 
-### Offline Knowledge Pipeline
-
-当前已完成的离线知识库构建流程：
+### Offline Knowledge Base Pipeline
 
 ```text
 Document Manifest
@@ -135,7 +115,7 @@ NormalizedDocument
         ↓
 Regulation Parser
         ↓
- Chapter / Article
+Chapter / Article
         ↓
 Structure-aware Chunker
         ↓
@@ -145,383 +125,110 @@ Structure-aware Chunker
         ↓
  Data Validation
         ↓
-     BGE-M3
-        ↓
- Dense Embedding
+ BGE-M3 Embedding
         ↓
       Qdrant
 ```
 
-### Current Retrieval Pipeline
-
-当前已完成的检索主链路：
+当前法规采用：
 
 ```text
-                         ┌─ BGE-M3 ─ Qdrant ─ Dense Top 20
-Query ───────────────────┤
-                         └─ Jieba ─ BM25 ───── BM25 Top 20
-                                      ↓
-                                     RRF
-                                      ↓
-                               Hybrid Top 20
-                                      ↓
-                           bge-reranker-v2-m3
-                                      ↓
-                                  Final Top 5
+1 Article = 1 Chunk
 ```
 
-### V1 Target Architecture
+而不是固定字符长度切分。
 
-完整 V1 目标架构：
-
-```text
-                              Streamlit
-                                  │
-                                  ▼
-                               FastAPI
-                                  │
-                                  ▼
-                             QueryService
-                                  │
-                         ACL / Role Context
-                                  │
-                     ┌────────────┴────────────┐
-                     ▼                         ▼
-              Dense Retrieval            BM25 Retrieval
-              BGE-M3 + Qdrant
-                     │                         │
-                     └────────────┬────────────┘
-                                  ▼
-                              RRF Fusion
-                                  │
-                                  ▼
-                               Reranker
-                                  │
-                                  ▼
-                            Evidence Gate
-                           ┌──────┴──────┐
-                           ▼             ▼
-                         Accept        Refusal
-                           │
-                           ▼
-                     Prompt Builder
-                           │
-                           ▼
-                          LLM
-                           │
-                           ▼
-                  Answer + Citation
-```
-
-设计原则：
-
-```text
-ACL
-应在 Retrieval 阶段过滤
-
-而不是：
-先全局召回
-再在结果末尾过滤
-```
-
-```text
-Evidence Gate
-负责判断证据是否足够
-
-LLM Prompt
-只是第二道约束
-
-不依赖 LLM 自己决定是否应该拒答
-```
+对于法规类文档，条款本身具有明确语义边界，因此当前 V1 优先保留法律结构。
 
 ---
 
-## Data Sources
-
-当前首批知识库文档：
-
-- 《生成式人工智能服务管理暂行办法》
-- 《互联网信息服务深度合成管理规定》
-
-当前语料：
+### Online Retrieval Pipeline
 
 ```text
-2 篇公开法规
-49 个法规级 Chunk
+User Query
+    ↓
+AccessContext
+    ↓
+ACL Authorized Search Space
+    ↓
+┌──────────────────────┐
+│                      │
+↓                      ↓
+Dense Retrieval      BM25 Retrieval
+BGE-M3 + Qdrant      Jieba + BM25Okapi
+Top 20               Top 20
+│                      │
+└──────────┬───────────┘
+           ↓
+        RRF Fusion
+         k = 60
+           ↓
+     Hybrid Top 20
+           ↓
+ bge-reranker-v2-m3
+           ↓
+     Reranked Top 5
 ```
 
-后续计划扩展：
+当前系统没有直接比较 Dense Score 与 BM25 Score。
 
-- OWASP Top 10 for LLM / GenAI
-- OWASP 必要英文原文
-- FastAPI 官方文档选段
-- Qdrant 官方文档选段
-- 少量企业内部技术规范模拟数据
-
-项目不计划构建“万能知识库”。
-
-目标是围绕：
+两种检索器的原始分数量纲不同，因此使用 rank-based Reciprocal Rank Fusion：
 
 ```text
-AI 合规法规
-+
-LLM / RAG 安全规范
-+
-企业 AI 应用技术规范
+RRF(d) = Σ 1 / (k + rank)
 ```
-
-形成一个领域边界明确的知识库。
-
----
-
-## Document Manifest
-
-项目使用：
-
-```text
-data/manifest/documents.yaml
-```
-
-统一管理知识库文档的文档级元数据。
-
-Manifest 示例：
-
-```yaml
-document_id: cn_genai_interim_2023
-title: 生成式人工智能服务管理暂行办法
-document_type: regulation
-language: zh-CN
-version: "2023"
-access_level: public
-source_url: ...
-local_path: ...
-enabled: true
-```
-
-Manifest 主要维护：
-
-- 文档身份
-- 文档标题
-- 数据来源
-- 文档类型
-- 文档版本
-- 文档语言
-- 权限级别
-- 本地文件路径
-- 是否启用
-
-通过 Manifest 将原始文件与代码逻辑解耦，为后续：
-
-```text
-多文档
-版本管理
-重新建库
-ACL
-数据追踪
-```
-
-提供基础。
-
----
-
-## Ingestion Pipeline
-
-### 1. HTML Loading
-
-从本地保存的官方 HTML 页面中读取原始内容。
-
-针对国家网信办页面结构定位实际正文容器，并移除正文内部可能存在的：
-
-```text
-script
-style
-```
-
-等非正文节点。
-
-Loader 只负责：
-
-```text
-Source File
-→ 正文文本
-```
-
-不负责 Chunk。
-
----
-
-### 2. Text Normalization
-
-对提取出的正文进行统一标准化，包括：
-
-- 换行符统一
-- 全角空格处理
-- NBSP 处理
-- 行首尾空白清理
-- 多余空格压缩
-- 空行清理
-
-同时保留法规中的：
-
-```text
-章
-条
-（一）
-（二）
-```
-
-等结构边界。
-
-没有简单使用：
-
-```python
-" ".join(text.split())
-```
-
-将全文压成单行，因为这会破坏后续法规结构解析需要的信息。
-
----
-
-### 3. Regulation Parsing
-
-针对中文法规识别：
-
-```text
-章
-↓
-条
-↓
-条款正文
-```
-
-并转换为结构化法规对象。
-
-Parser 会保留：
-
-- 章节编号
-- 章节标题
-- 条款编号
-- 条款正文
-
-例如：
-
-```text
-第二章 技术发展与治理
-↓
-第七条
-↓
-条款正文
-```
-
-Parser 同时覆盖文件结束时最后一个条款 flush、正文误识别等边界问题。
-
----
-
-### 4. Structure-aware Chunking
-
-法规类文档没有直接采用固定字符窗口切分。
-
-当前策略：
-
-```text
-法规全文
-   ↓
-识别“章”
-   ↓
-识别“条”
-   ↓
-一条法规 ≈ 一个 Chunk
-```
-
-原因：
-
-> 法规中的“条”本身就是天然且稳定的法律语义边界。
-
-相比固定字符窗口，可以减少一个完整法律条款被从中间截断的问题。
-
----
-
-### 5. Data Validation
-
-Chunk 构建完成后，在进入 Embedding / Vector Index 之前执行独立数据质量校验。
-
-整体：
-
-```text
-Parser
-   ↓
-Chunker
-   ↓
-chunks.jsonl
-   ↓
-Validator
-   ↓
-Embedding
-```
-
-避免明显错误数据直接进入向量数据库。
-
----
-
-## Chunking Strategy
-
-### Current Strategy
 
 当前：
 
 ```text
-1 Article
-≈
-1 KnowledgeChunk
+k = 60
 ```
-
-暂时不使用：
-
-```text
-固定 500 字
-+
-Overlap
-```
-
-作为法规语料的主切分方式。
-
-### First-batch Character Statistics
-
-| 文档 | Chunk 数 | 最短字符数 | 最长字符数 | 平均字符数 |
-| --- | ---: | ---: | ---: | ---: |
-| 《生成式人工智能服务管理暂行办法》 | 24 | 18 | 401 | 127.79 |
-| 《互联网信息服务深度合成管理规定》 | 25 | 18 | 491 | 130.04 |
-| **合计** | **49** | - | - | - |
-
-根据当前语料：
-
-> 以“条”为 Chunk 边界能够较好保持完整法律语义，当前暂时没有必要进行条内二次切分。
-
-对于较短条款，也不会仅因为字符少而强制与相邻条款合并。
-
-例如：
-
-```text
-本办法自某年某月某日起施行。
-```
-
-虽然很短，但它本身就是完整且具有独立法律含义的证据。
-
-后续如果出现数千字超长条款，再根据真实数据加入：
-
-```text
-Article
-↓
-Secondary Split
-```
-
-而不是提前增加不必要复杂度。
 
 ---
 
-## Chunk Data Model
+### Online RAG Query Pipeline
 
-标准 `KnowledgeChunk` 当前包含：
+```text
+HTTP Request
+      ↓
+FastAPI
+      ↓
+AccessContext
+      ↓
+ACL-aware Retrieval
+      ↓
+Dense + BM25
+      ↓
+RRF
+      ↓
+Reranker
+      ↓
+Coarse Relevance Gate
+      ↓
+┌─────────────────────────┐
+│                         │
+明显无关                  通过
+│                         │
+↓                         ↓
+Programmatic Refusal   Evidence-Constrained
+                       Generation
+                           ↓
+                   Evidence Sufficiency
+                      /           \
+                    足够           不足
+                     ↓             ↓
+                   Answer       Refusal
+                     ↓
+             Deterministic Citation
+```
+
+---
+
+## Knowledge Chunk
+
+当前核心知识单元为 `KnowledgeChunk`。
+
+主要字段包括：
 
 ```text
 chunk_id
@@ -530,1203 +237,823 @@ title
 document_type
 language
 version
-
 chapter_number
 chapter_title
 article_number
-
 content
 retrieval_text
-
 source_url
 access_level
-
 chunk_index
 content_hash
 ```
 
-字段说明：
-
-| 字段 | 作用 |
-| --- | --- |
-| `chunk_id` | Chunk 稳定业务标识 |
-| `document_id` | 所属文档 ID |
-| `title` | 文档标题 |
-| `document_type` | 文档类型 |
-| `language` | 文档语言 |
-| `version` | 文档版本 |
-| `chapter_number` | 所属章节编号 |
-| `chapter_title` | 所属章节标题 |
-| `article_number` | 法规条款编号 |
-| `content` | 原始条款正文 |
-| `retrieval_text` | 用于 Embedding / BM25 / Reranker 的增强检索文本 |
-| `source_url` | 原始数据来源 |
-| `access_level` | ACL 检索过滤依据 |
-| `chunk_index` | Chunk 在文档中的顺序 |
-| `content_hash` | 内容一致性与增量更新判断依据 |
-
----
-
-## content vs retrieval_text
-
-项目明确区分：
+其中：
 
 ```text
 content
 ```
 
-与：
+用于 Generation。
 
 ```text
 retrieval_text
 ```
 
-`content`：
+用于 Dense / BM25 Retrieval。
 
-> 保存干净的原始条款正文，用于 Citation、展示和证据返回。
-
-`retrieval_text`：
+当前 `retrieval_text` 由：
 
 ```text
-文档标题
+标题
 +
-章节信息
+章节
 +
 条款编号
 +
 正文
 ```
 
-例如：
-
-```text
-生成式人工智能服务管理暂行办法
-第二章 技术发展与治理
-第七条
-生成式人工智能服务提供者……
-```
-
-当前以下组件统一使用 `retrieval_text`：
-
-```text
-BGE-M3
-BM25
-bge-reranker-v2-m3
-```
-
-从而减少不同检索阶段使用不同文本表示带来的额外变量。
+组成。
 
 ---
 
-## Chunk ID
+## Current Corpus
 
-法规类 Chunk 当前采用可读且稳定的业务 ID，例如：
+当前已完成两份真实法规的结构化处理：
 
-```text
-cn_genai_interim_2023__第一条
-cn_genai_interim_2023__第七条
-```
+1. 《生成式人工智能服务管理暂行办法》
+2. 《互联网信息服务深度合成管理规定》
 
-构成：
+当前共生成：
 
 ```text
-document_id
-+
-article_number
+49 Knowledge Chunks
 ```
 
-业务 `chunk_id` 与 Qdrant Point ID 分离。
-
-Qdrant Point ID 使用基于 `chunk_id` 生成的稳定 UUID5：
+当前所有真实法规 Chunk 均为：
 
 ```text
-chunk_id
-↓
-UUID5
-↓
-Qdrant Point ID
+access_level = public
 ```
 
-这样重复执行 Upsert 时，同一个 Chunk 会得到相同 Point ID，避免随机 UUID 导致重复数据。
+ACL 的 developer/admin 场景使用专门构造的 synthetic mixed-access corpus 进行验证，避免篡改真实法规数据。
 
 ---
 
-## Intermediate Data
+## Dense Retrieval
 
-标准 Chunk 保存为：
-
-```text
-data/processed/chunks.jsonl
-```
-
-采用 JSONL：
-
-```text
-一行
-=
-一个 KnowledgeChunk
-```
-
-整体：
-
-```text
-Raw Documents
-      ↓
-Ingestion Pipeline
-      ↓
-chunks.jsonl
-      ↓
-Embedding
-      ↓
-Vector Index
-```
-
-`chunks.jsonl` 是可复用的标准中间产物。
-
-Qdrant 被视为：
-
-```text
-Derived Index
-```
-
-而不是原始数据唯一来源。
-
-即使 Qdrant Volume 被删除，仍可以：
-
-```text
-chunks.jsonl
-↓
-BGE-M3
-↓
-Vector Upsert
-↓
-重新构建 Qdrant
-```
-
----
-
-## Data Quality Validation
-
-在进入 Embedding 与 Vector Index 前，`chunks.jsonl` 会经过独立数据质量校验。
-
-当前检查包括：
-
-- `chunk_id` 唯一性
-- 核心字段不能为空
-- `access_level` 是否合法
-- `retrieval_text` 是否包含必要上下文
-- `content_hash` 是否与正文一致
-- 同一文档内 `chunk_index` 是否连续
-
-运行：
-
-```bash
-python scripts/validate_chunks.py
-```
-
-当前：
-
-```text
-Chunk 总数：49
-
-数据质量校验通过
-```
-
----
-
-# Retrieval
-
-## BGE-M3 Dense Embedding
-
-当前 Dense Embedding 模型：
+Embedding Model：
 
 ```text
 BAAI/bge-m3
 ```
 
-运行方式：
-
-```text
-Framework:
-FlagEmbedding
-
-Device:
-cuda:0
-
-Precision:
-FP16
-```
-
-当前实测 Dense Vector Dimension：
+Embedding Dimension：
 
 ```text
 1024
 ```
 
-模型基础 sanity check：
+Vector Database：
 
 ```text
-Query:
-训练数据需要满足什么要求？
-
-相关文本：
-生成式人工智能服务提供者应当依法处理训练数据。
-
-Similarity:
-0.6816
-
-无关文本：
-今天天气很好，我准备出去散步。
-
-Similarity:
-0.3560
+Qdrant
 ```
 
-该实验用于验证：
+Distance：
 
 ```text
-语义相关文本
-在 Dense Embedding Space 中
-具有更高相似度
+Cosine
 ```
 
-不作为正式 Retrieval Evaluation。
-
----
-
-## Chunk Token Analysis
-
-使用 BGE-M3 Tokenizer 对实际 `retrieval_text` 统计：
-
-| 指标 | 当前结果 |
-| --- | ---: |
-| Chunk 数量 | 49 |
-| Minimum Tokens | 31 |
-| Maximum Tokens | 327 |
-| Average Tokens | 94.94 |
-| Chunks over 512 | 0 |
-
-最长 Chunk：
-
-```text
-chunk_id:
-cn_deep_synthesis_2022__第二十三条
-
-Token Count:
-327
-```
-
-因此当前法规语料下：
-
-```text
-max_length = 512
-```
-
-能够完整覆盖全部 `retrieval_text`。
-
-当前没有发生 Embedding 输入截断。
-
-该参数来自实际语料统计，而不是简单使用 BGE-M3 支持的最大上下文长度。
-
----
-
-## Qdrant Vector Index
-
-当前 Collection：
+Collection：
 
 ```text
 compliance_chunks_v1
 ```
 
-当前 Schema：
+当前 Dense Retrieval：
 
 ```text
-Point Count:
-49
-
-Vector Size:
-1024
-
-Distance:
-Cosine
-```
-
-一个 Qdrant Point 对应：
-
-```text
-1 KnowledgeChunk
-+
-1 Dense Vector
-+
-Payload Metadata
-```
-
-Payload 当前包含：
-
-```text
-chunk_id
-document_id
-title
-document_type
-language
-version
-
-chapter_number
-chapter_title
-article_number
-
-content
-retrieval_text
-
-source_url
-access_level
-
-chunk_index
-content_hash
-```
-
-其中：
-
-```text
-access_level
-```
-
-将在后续 ACL-aware Retrieval 中作为 Qdrant Payload Filter 的基础字段。
-
----
-
-## Dense Retrieval Sanity Check
-
-测试 Query：
-
-```text
-生成式人工智能服务处理训练数据需要遵守什么规定？
-```
-
-先对全部 49 Chunk 进行 brute-force Dense Retrieval：
-
-```text
-Query Embedding
-      ↓
-document_vectors @ query_vector
-      ↓
-Top-K
-```
-
-再通过 Qdrant 执行相同 Dense Retrieval。
-
-两者 Top-5 排序保持一致：
-
-| Rank | Chunk | Brute-force Score | Qdrant Score |
-| ---: | --- | ---: | ---: |
-| 1 | 《生成式人工智能服务管理暂行办法》第七条 | 0.8208 | 0.8211 |
-| 2 | 《生成式人工智能服务管理暂行办法》第四条 | 0.7417 | 0.7418 |
-| 3 | 《生成式人工智能服务管理暂行办法》第十九条 | 0.7246 | 0.7250 |
-| 4 | 《生成式人工智能服务管理暂行办法》第二十三条 | 0.6997 | 0.6998 |
-| 5 | 《生成式人工智能服务管理暂行办法》第八条 | 0.6982 | 0.6985 |
-
-该实验主要验证：
-
-```text
-Chunk
-↓
-retrieval_text
-↓
+Query
+  ↓
 BGE-M3
-↓
-Vector
-↓
-Point Alignment
-↓
-Qdrant Upsert
-↓
-Qdrant Search
+  ↓
+1024-d Vector
+  ↓
+Qdrant
+  ↓
+Dense Top K
 ```
-
-整条数据链路没有明显错位。
-
-> 该结果属于 sanity check，不代表正式 Retrieval Accuracy。
 
 ---
 
-## BM25 Sparse Retrieval
+## Sparse Retrieval
 
-当前 Sparse / Lexical Retrieval 使用：
+当前 Sparse Retrieval 使用：
 
 ```text
 Jieba
 +
-rank-bm25
-+
 BM25Okapi
 ```
 
-中文文本首先通过 Jieba 精确模式分词：
+BM25 使用 `retrieval_text` 建立索引。
+
+当前 V1 暂未加入：
+
+- 自定义停用词；
+- 自定义领域词典；
+- k1 / b 参数调优。
+
+这些参数将在 Evaluation 阶段根据数据决定是否需要调整。
+
+---
+
+## Hybrid Retrieval
+
+当前 Hybrid Retrieval：
 
 ```text
-Chinese Text
-↓
-Jieba Tokenization
-↓
+Dense Top 20
++
+BM25 Top 20
+        ↓
+       RRF
+      k = 60
+        ↓
+Hybrid Top 20
+```
+
+当前选择 RRF 的主要原因：
+
+1. Dense 与 BM25 原始 Score 不可直接比较；
+2. RRF 只依赖 Rank；
+3. 实现简单且容易解释；
+4. 适合作为可复现的 Hybrid Retrieval Baseline。
+
+正式效果将在后续 Evaluation 中通过消融实验验证：
+
+```text
+Dense
+vs
 BM25
+vs
+Hybrid RRF
+vs
+Hybrid + Rerank
 ```
-
-当前 V1 暂时：
-
-```text
-不使用复杂停用词表
-不自定义 k1 / b
-不引入自定义专业词典
-```
-
-先保留清晰 baseline，后续通过 Evaluation 判断优化是否真实有效。
-
----
-
-## Dense vs BM25
-
-对于 Query：
-
-```text
-生成式人工智能服务处理训练数据需要遵守什么规定？
-```
-
-Dense：
-
-```text
-《生成式人工智能服务管理暂行办法》第七条
-
-Dense Rank = 1
-```
-
-BM25：
-
-```text
-《生成式人工智能服务管理暂行办法》第七条
-
-BM25 Rank = 2
-```
-
-BM25 Rank 1：
-
-```text
-《互联网信息服务深度合成管理规定》第十四条
-```
-
-该条款中高频出现：
-
-```text
-训练数据
-训练数据管理
-训练数据安全
-```
-
-等词面高度匹配内容，因此 BM25 排名很高。
-
-当前观察：
-
-```text
-Dense Retrieval
-→ 更擅长语义相似、自然语言表达和同义匹配
-
-BM25 Retrieval
-→ 更擅长关键词、专有术语和固定表述匹配
-```
-
-对于关键词 Query：
-
-```text
-数据标注质量评估
-```
-
-BM25 将：
-
-```text
-《生成式人工智能服务管理暂行办法》第八条
-```
-
-排在 Top 1。
-
-正文直接包含：
-
-```text
-开展数据标注质量评估
-```
-
-说明 BM25 对法规固定词面表达具有明显优势。
-
----
-
-## RRF Hybrid Retrieval
-
-Dense Cosine Score 与 BM25 Score 不属于同一数值空间。
-
-例如：
-
-```text
-Dense:
-0.x
-
-BM25:
-数个到十几个
-```
-
-因此系统不执行：
-
-```text
-dense_score + bm25_score
-```
-
-而使用：
-
-```text
-Reciprocal Rank Fusion
-```
-
-公式：
-
-```text
-RRF(d) = Σ 1 / (k + rank_i(d))
-```
-
-当前 baseline：
-
-```text
-RRF k = 60
-```
-
-对于 Query：
-
-```text
-生成式人工智能服务处理训练数据需要遵守什么规定？
-```
-
-核心证据：
-
-```text
-《生成式人工智能服务管理暂行办法》第七条
-
-Dense Rank = 1
-BM25 Rank = 2
-Hybrid Rank = 1
-```
-
-BM25 单独 Rank 1 的：
-
-```text
-《互联网信息服务深度合成管理规定》第十四条
-```
-
-最终：
-
-```text
-Dense Rank = 19
-BM25 Rank = 1
-Hybrid Rank = 4
-```
-
-当前结果表明：
-
-> RRF 能够保留 BM25 的关键词召回能力，同时结合 Dense Retrieval 的语义排名信息，避免单一路检索结果直接支配最终候选顺序。
 
 ---
 
 ## Reranking
 
-当前 Reranker：
+Reranker：
 
 ```text
 BAAI/bge-reranker-v2-m3
 ```
 
-使用：
+当前流程：
 
 ```text
-FlagReranker
-+
-CUDA
-+
-FP16
+Hybrid Top 20
+      ↓
+Cross-Encoder Reranker
+      ↓
+Top 5
 ```
 
-整体：
+需要特别注意：
+
+> Rerank raw score 是相关性信号，不是概率。
+
+因此不能把：
 
 ```text
-Dense Top 20
-        \
-         → RRF Top 20
-        /
-BM25 Top 20
-        ↓
-bge-reranker-v2-m3
-        ↓
-Final Top 5
+score > 0
 ```
 
-Reranker 输入：
+简单理解成：
+
+```text
+“知识库一定可以回答”
+```
+
+---
+
+## ACL
+
+当前实现轻量级 RBAC：
+
+```text
+guest
+    ↓
+public
+
+developer
+    ↓
+public + developer
+
+admin
+    ↓
+public + developer + admin
+```
+
+### Dense ACL
+
+Qdrant 使用 payload filter：
 
 ```text
 Query
-+
-Candidate retrieval_text
+  ↓
+ACL Filter
+  ↓
+Authorized Vector Search Space
+  ↓
+Dense Top K
 ```
 
-与 Dense 不同，Reranker 使用 Cross-Encoder 形式直接联合建模 Query 和 Candidate。
+也就是说 ACL 在向量 Candidate Generation **之前**生效。
+
+### BM25 ACL
+
+BM25 为不同角色建立授权 Corpus：
+
+```text
+Role
+  ↓
+Authorized Chunks
+  ↓
+BM25 Scoring
+```
+
+同样不是：
+
+```text
+全库检索
+↓
+结果后过滤
+```
+
+### ACL Experiment
+
+使用 synthetic：
+
+```text
+public
+developer
+admin
+```
+
+三种访问级别 Chunk 进行了完整：
+
+```text
+Dense
++
+BM25
++
+RRF
++
+Reranker
+```
+
+链路验证。
+
+结果：
+
+```text
+guest unauthorized results      = 0
+developer unauthorized results  = 0
+admin unauthorized results      = 0
+```
+
+当前结论：
+
+> ACL 应在 Retrieval Candidate Generation 前限制搜索空间，而不是在全库检索之后进行 post-filter。
+
+当前 API 中 `role` 为了 Demo 由客户端显式传入。
+
+生产环境中不应信任客户端自行声明的角色，而应由：
+
+```text
+JWT / SSO / Trusted Identity Claims
+```
+
+生成 `AccessContext`。
 
 ---
 
-## Reranking Example
+## Evidence Gate Experiment
 
-Query：
-
-```text
-生成式人工智能服务处理训练数据需要遵守什么规定？
-```
-
-核心证据：
+项目最初尝试使用：
 
 ```text
-《生成式人工智能服务管理暂行办法》第七条
-
-Dense Rank  = 1
-BM25 Rank   = 2
-RRF Rank    = 1
-Rerank Rank = 1
-
-Rerank Score = 7.1016
+Top1 Cross-Encoder Rerank Score
 ```
 
-Query：
+作为单一 Answerability Gate。
+
+### Preliminary Result
+
+在最初：
+
+```text
+8 Answerable
++
+8 Unanswerable
+```
+
+样本中，两类出现明显分离：
+
+```text
+Answerable:
+min = 5.9062
+max = 7.7852
+avg = 6.9038
+
+Unanswerable:
+min = -8.6641
+max = 0.4089
+avg = -5.1149
+```
+
+简单 Gap：
+
+```text
+5.4973
+```
+
+但该结果主要来自相对标准的问题表达。
+
+---
+
+### Hard Case Experiment
+
+随后加入：
+
+```text
+Hard Positive
+```
+
+例如：
 
 ```text
 数据标注质量评估
+训练语料有哪些合规要求？
+违法内容怎么处理？
 ```
 
-核心证据：
+以及：
 
 ```text
-《生成式人工智能服务管理暂行办法》第八条
-
-Dense Rank  = 1
-BM25 Rank   = 1
-RRF Rank    = 1
-Rerank Rank = 1
-
-Rerank Score = 2.4219
+Hard Negative
 ```
 
-同时其余候选出现：
+例如：
 
 ```text
-Top 2: -4.1719
-Top 3: -5.7383
-Top 4: -5.8633
+发现违法内容后必须在几小时内处理？
+数据标注人员最低学历是什么？
+深度合成服务必须使用哪种审核算法？
 ```
 
-说明 Cross-Encoder 可以进一步拉开核心证据与弱相关候选之间的相关性差距。
+实验结果：
 
-需要注意：
+```text
+Hard Positive:
+min = -2.0898
+max = 4.0469
+avg = 1.6316
 
-- 当前使用 `normalize=False`
-- Rerank Score 是模型 Raw Relevance Score
-- Raw Score 可以为负
-- Raw Score 不是概率
-- 不同 Query 的 Raw Score 不应直接进行数值横向比较
-- Evidence Gate 阈值后续必须通过评测数据校准
+Hard Negative:
+min = 1.4775
+max = 4.8008
+avg = 3.4961
+```
+
+出现明显 Score Overlap：
+
+```text
+Hard Gap = -6.8906
+```
+
+因此项目不再采用：
+
+```text
+Rerank Score
+→ 单阈值
+→ 直接决定是否能够回答
+```
+
+而调整为：
+
+```text
+Rerank Score
+→ Coarse Relevance Gate
+→ 过滤明显 OOD Query
+
+然后：
+
+Evidence-Constrained Generation
+→ 判断 Evidence Sufficiency
+→ Answer / Refusal
+```
+
+当前实验结论：
+
+> Relevance ≠ Answerability。
+
+这是当前项目 Evidence Control 设计的核心依据。
 
 ---
 
-## Retrieval Baseline Parameters
+## Evidence-Constrained Generation
 
-当前 V1 Retrieval baseline：
-
-| 参数 | 当前值 |
-| --- | ---: |
-| Dense Top-K | 20 |
-| BM25 Top-K | 20 |
-| RRF k | 60 |
-| Hybrid Candidate Top-K | 20 |
-| Rerank Final Top-K | 5 |
-| BGE-M3 Dense Dimension | 1024 |
-| BGE-M3 max_length | 512 |
-| Embedding batch_size | 8 |
-| Embedding Precision | FP16 |
-| Reranker Precision | FP16 |
-| Device | CUDA / RTX 4060 Laptop |
-
-这些参数目前属于：
+LLM：
 
 ```text
-V1 Baseline
+deepseek-ai/DeepSeek-V4-Flash
 ```
 
-最终值将由后续 Evaluation 与消融实验决定，而不是仅凭经验固定。
+API：
+
+```text
+SiliconFlow OpenAI-compatible API
+```
+
+Generation Prompt 要求：
+
+- 只能使用提供的 Evidence；
+- 不允许补充 Evidence 之外的事实；
+- Evidence 相关但不能回答具体问题时必须拒答；
+- 不允许把“及时”等模糊描述推断成具体小时数；
+- 只能引用程序提供的 Evidence ID；
+- Evidence 不足时输出结构化拒答。
 
 ---
 
-## Local GPU Observation
+## Structured Refusal
 
-当前开发机器：
-
-```text
-GPU:
-NVIDIA GeForce RTX 4060 Laptop GPU
-
-Dedicated VRAM:
-8 GB
-```
-
-BGE-M3 与 `bge-reranker-v2-m3` 同时加载，并运行：
+例如问题：
 
 ```text
-Dense Top 20
-+
-BM25 Top 20
-+
-RRF Top 20
-+
-Reranker 20 → 5
+《生成式人工智能服务管理暂行办法》
+规定发现违法内容后必须在几小时内处理？
 ```
 
-本地观察峰值专用显存约：
+Retrieval Top1 能正确命中：
 
 ```text
-3.3 GB
+第十四条
 ```
 
-未发生 CUDA OOM。
+且 rerank score 较高：
 
-> 该数据仅为当前开发环境中的 observed peak VRAM，不代表系统最低显存要求。
+```text
+≈ 4.543
+```
+
+但 Evidence 只规定：
+
+```text
+“及时采取停止生成、停止传输、消除等处置措施”
+```
+
+没有明确：
+
+```text
+具体几小时
+```
+
+因此最终结果为：
+
+```text
+gate_reason = passed
+
+answerable = false
+answer = null
+citations = []
+```
+
+说明系统没有将高相关性错误等价为“足够回答”。
 
 ---
 
-## Local Latency Observation
+## Deterministic Citation
 
-测试 Query：
+LLM 不直接决定真实法规来源。
 
-```text
-生成式人工智能服务处理训练数据需要遵守什么规定？
-```
-
-单次本地观测：
-
-| Stage | Observed Latency |
-| --- | ---: |
-| Initialization | 16068.51 ms |
-| Dense Retrieval | 633.95 ms |
-| BM25 Retrieval | 0.54 ms |
-| RRF Fusion | 0.05 ms |
-| Reranker | 1374.50 ms |
-| Total Query Pipeline | 2009.04 ms |
-
-其中：
+Generation 前，程序为 Evidence 分配：
 
 ```text
-Initialization
+E1
+E2
+E3
+...
 ```
 
-包括：
+LLM 只能返回：
 
-- BGE-M3 加载
-- Jieba / BM25 初始化
-- bge-reranker-v2-m3 加载
+```json
+{
+  "citations": ["E1"]
+}
+```
 
-模型在正式服务中应在应用启动阶段初始化，而不是每个 Query 重新加载。
-
-当前在线检索阶段的主要成本来自：
+Parser 会验证：
 
 ```text
-1. Reranker
-2. Dense Query Embedding + Qdrant Search
+E1 是否真实存在
 ```
 
-BM25 与 RRF 在当前 49 Chunk 规模下耗时很低。
-
-当前数据：
-
-> 仅为开发环境中的单次 observation，不属于正式性能 benchmark。
-
-后续 Evaluation 阶段将统计：
+然后程序再从内部 Evidence Mapping 获取：
 
 ```text
-mean latency
-p50 latency
-p95 latency
+chunk_id
+title
+article_number
+source_url
 ```
 
-并比较：
+如果 LLM 返回：
+
+```text
+E99
+```
+
+但本次请求不存在该 Evidence：
+
+```text
+→ Parser Reject
+```
+
+因此 Citation Metadata 不依赖模型自由生成。
+
+---
+
+## QueryService
+
+`QueryService` 是当前核心 Application Service。
+
+它负责：
+
+```text
+Query
+  ↓
+AccessContext
+  ↓
+RerankedRetriever
+  ↓
+Coarse Relevance Gate
+  ↓
+EvidenceGroundedAnswerer
+  ↓
+QueryResult
+```
+
+FastAPI Router 不直接编排：
 
 ```text
 Dense
 BM25
-Hybrid
-Hybrid + Rerank
+RRF
+Reranker
+LLM
 ```
 
-之间的效果 / 延迟权衡。
+HTTP 层只负责：
+
+```text
+Request Validation
+↓
+AccessContext
+↓
+QueryService
+↓
+Response Mapping
+```
 
 ---
 
-## Current Retrieval Conclusions
+## FastAPI Runtime
 
-当前阶段已经得到以下工程结论：
-
-1. BGE-M3 Dense Embedding 在当前运行环境中实测为 1024 维。
-2. 当前首批法规 `retrieval_text` Token 长度全部低于 512，因此 `max_length=512` 不产生截断。
-3. Brute-force Dense Retrieval 与 Qdrant Dense Retrieval 在基准 Query 上的 Top-5 排序保持一致。
-4. Dense 与 BM25 在法规检索场景中表现出明显互补特征。
-5. Dense Cosine Score 与 BM25 Score 不同量纲，不能直接相加。
-6. Hybrid Retrieval 当前采用基于排名的 RRF。
-7. RRF 能同时利用 Dense 的语义匹配与 BM25 的关键词召回能力。
-8. `bge-reranker-v2-m3` 可以对 Hybrid Candidate 进行 Cross-Encoder 二阶段精排。
-9. 当前 RTX 4060 Laptop 8GB 环境可以同时运行 BGE-M3 与 Reranker。
-10. 当前本地观察峰值专用显存约 3.3GB。
-11. 当前单次 Retrieval Pipeline 本地观测约为 2 秒，其中 Reranker 是主要延迟来源。
-12. 当前结果均属于开发阶段 sanity check，最终 Recall@K、MRR 与 Rerank 收益仍需要 Evaluation Dataset 验证。
-
----
-
-## Tests
-
-项目使用：
+重型资源通过 FastAPI Application Lifespan 在服务启动阶段初始化一次：
 
 ```text
-pytest
+FastAPI Startup
+       ↓
+Read chunks.jsonl
+       ↓
+Load BGE-M3
+       ↓
+Build BM25
+       ↓
+Connect Dense Retrieval
+       ↓
+Load Reranker
+       ↓
+Create Evidence Gate
+       ↓
+Create LLM Client
+       ↓
+Create Grounded Answerer
+       ↓
+Create QueryService
+       ↓
+Runtime Ready
 ```
 
-对核心数据处理与 Retrieval 逻辑进行自动化测试。
+HTTP 请求复用已经初始化的 Runtime。
 
-运行：
-
-```bash
-pytest -v
-```
-
-当前全量 pytest 已通过。
-
-### Current Coverage
-
-#### Ingestion
-
-- 法规章节结构解析
-- 法规条款结构解析
-- 文件结束时最后一条不会丢失
-- 正文中类似“第X条……”的普通文本不会误识别为新条款
-- Structure-aware Chunk 构建
-- `content_hash` 稳定性
-- 正文变化后 `content_hash` 变化
-- 重复 `chunk_id` 检测
-- 非法 `access_level` 检测
-
-#### RRF
-
-- 同时出现在 Dense / BM25 中的候选获得双路排名贡献
-- RRF 使用 Rank 而不是直接使用 Raw Score
-- 非法 `top_k` 检测
-- 非法 `rrf_k` 检测
-
-#### Reranked Retrieval
-
-- Reranker 能重新排序 Hybrid Candidate
-- 精排后保留原始 RRF Rank
-- 非法最终 `top_k` 检测
-
-需要真实：
+不会每次请求重新加载：
 
 ```text
-GPU
 BGE-M3
-Qdrant
+bge-reranker
+BM25 Index
+```
+
+---
+
+## API
+
+### Health
+
+```http
+GET /health
+```
+
+用途：
+
+```text
+检查 FastAPI 服务进程是否存活。
+```
+
+示例：
+
+```json
+{
+  "status": "ok",
+  "service": "enterprise-rag-compliance",
+  "version": "0.1.0"
+}
+```
+
+---
+
+### Readiness
+
+```http
+GET /ready
+```
+
+用途：
+
+```text
+检查 RAG Runtime 是否已经完成初始化。
+```
+
+示例：
+
+```json
+{
+  "status": "ready",
+  "runtime_ready": true,
+  "retrieval_ready": true,
+  "query_ready": true,
+  "chunk_count": 49
+}
+```
+
+---
+
+### Retrieve
+
+```http
+POST /api/v1/retrieve
+```
+
+Request：
+
+```json
+{
+  "query": "生成式人工智能服务处理训练数据需要遵守什么规定？",
+  "role": "guest",
+  "top_k": 5
+}
+```
+
+功能：
+
+```text
+ACL-aware Dense
++
+ACL-aware BM25
++
+RRF
++
 Reranker
 ```
 
-的检查暂时通过 `scripts/check_*.py` 作为 Integration / Sanity Check，而不放入默认单元测试中，避免普通 `pytest` 每次加载大型模型。
-
----
-
-## Regression Test
-
-开发过程中，自动测试曾发现法规 Parser 的真实边界问题。
-
-测试文本：
+该接口：
 
 ```text
-第一条
-第一条内容。
-第二条
-这是第二条内容。
+不调用 LLM。
 ```
 
-早期正则可能将：
+主要用于：
 
 ```text
-第一条内容。
-```
-
-错误识别成新的条款开头：
-
-```text
-第一条
-```
-
-导致产生重复条款。
-
-问题修复后增加对应 Regression Test，避免未来修改 Parser 时重新引入该问题。
-
-这体现了当前项目的数据处理验证原则：
-
-```text
-真实数据人工检查
-        +
-自动化边界测试
-        ↓
-提高 Ingestion Pipeline 稳定性
+Retrieval Debug
+Evaluation
+Observability
+ACL Demo
 ```
 
 ---
 
-## Development Scripts
+### Ask
 
-当前开发阶段包含若干独立验证脚本。
-
-### Ingestion
-
-```text
-scripts/inspect_manifest.py
-scripts/inspect_document.py
-scripts/inspect_regulation.py
-scripts/inspect_chunks.py
-scripts/build_chunks.py
-scripts/validate_chunks.py
+```http
+POST /api/v1/ask
 ```
 
-### GPU / Embedding
+Request：
 
-```text
-scripts/check_torch_cuda.py
-scripts/check_bge_m3.py
-scripts/inspect_bge_chunks.py
-scripts/check_embedding_service.py
+```json
+{
+  "query": "生成式人工智能服务处理训练数据需要遵守什么规定？",
+  "role": "guest"
+}
 ```
 
-### Vector Index
+Response 示例：
 
-```text
-scripts/build_vector_index.py
+```json
+{
+  "query": "生成式人工智能服务处理训练数据需要遵守什么规定？",
+  "role": "guest",
+  "answerable": true,
+  "answer": "根据相关规定……",
+  "reason": "E1 提供了明确依据。",
+  "citations": [
+    {
+      "evidence_id": "E1",
+      "chunk_id": "cn_genai_interim_2023__第七条",
+      "title": "生成式人工智能服务管理暂行办法",
+      "article_number": "第七条",
+      "source_url": "..."
+    }
+  ],
+  "retrieval_count": 5,
+  "top_rerank_score": 7.1015625,
+  "gate_reason": "passed"
+}
 ```
-
-### Retrieval
-
-```text
-scripts/check_dense_retriever.py
-scripts/check_bm25_retriever.py
-scripts/check_hybrid_retriever.py
-scripts/check_bge_reranker.py
-scripts/check_reranked_retrieval.py
-scripts/check_retrieval_latency.py
-```
-
-这些脚本主要用于：
-
-```text
-技术假设验证
-+
-Integration Sanity Check
-+
-问题定位
-```
-
-而不是作为最终用户接口。
 
 ---
 
-## Project Structure
+## API Status Model
 
-当前主要目录：
+当前服务区分：
 
 ```text
-enterprise-rag-compliance/
-│
-├── data/
-│   ├── manifest/
-│   │   └── documents.yaml
-│   ├── raw/
-│   └── processed/
-│       └── chunks.jsonl
-│
-├── scripts/
-│   ├── build_chunks.py
-│   ├── validate_chunks.py
-│   ├── build_vector_index.py
-│   ├── check_torch_cuda.py
-│   ├── check_bge_m3.py
-│   ├── inspect_bge_chunks.py
-│   ├── check_embedding_service.py
-│   ├── check_dense_retriever.py
-│   ├── check_bm25_retriever.py
-│   ├── check_hybrid_retriever.py
-│   ├── check_bge_reranker.py
-│   ├── check_reranked_retrieval.py
-│   └── check_retrieval_latency.py
-│
-├── src/
-│   └── enterprise_rag/
-│       │
-│       ├── ingestion/
-│       │   ├── loaders/
-│       │   ├── manifest.py
-│       │   ├── normalizer.py
-│       │   ├── models.py
-│       │   ├── regulation_parser.py
-│       │   ├── document_builder.py
-│       │   ├── chunker.py
-│       │   ├── chunk_store.py
-│       │   └── validator.py
-│       │
-│       ├── embeddings/
-│       │   └── bge_m3.py
-│       │
-│       ├── vectorstore/
-│       │   └── qdrant_store.py
-│       │
-│       ├── retrieval/
-│       │   ├── config.py
-│       │   ├── models.py
-│       │   ├── dense.py
-│       │   ├── bm25.py
-│       │   ├── rrf.py
-│       │   ├── hybrid.py
-│       │   └── reranked.py
-│       │
-│       └── reranking/
-│           └── bge_reranker.py
-│
-├── tests/
-│   ├── fixtures/
-│   ├── test_chunker.py
-│   ├── test_regulation_parser.py
-│   ├── test_validator.py
-│   ├── test_rrf.py
-│   └── test_reranked_retriever.py
-│
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── pyproject.toml
-└── README.md
+Process Health
+      ↓
+GET /health
 ```
 
-> 项目目录仍会随着 ACL、Generation、API 与 Evaluation 模块继续扩展。
+和：
+
+```text
+RAG Runtime Readiness
+      ↓
+GET /ready
+```
+
+以及：
+
+```text
+Retrieval Debug
+      ↓
+POST /api/v1/retrieve
+```
+
+和：
+
+```text
+Business QA
+      ↓
+POST /api/v1/ask
+```
 
 ---
 
-## Current Tech Stack
+## Run Qdrant
 
-当前已经实际使用：
-
-### Language / Runtime
-
-- Python 3.11
-
-### Data Processing
-
-- BeautifulSoup
-- PyYAML
-
-### Machine Learning
-
-- PyTorch
-- CUDA
-- FlagEmbedding
-- BGE-M3
-- bge-reranker-v2-m3
-- NumPy
-
-### Retrieval
-
-- Qdrant
-- qdrant-client
-- Jieba
-- rank-bm25
-- BM25Okapi
-- Reciprocal Rank Fusion
-
-### Infrastructure
-
-- Docker
-- Docker Compose
-
-### Testing
-
-- pytest
-
----
-
-## Planned Tech Stack
-
-后续 V1 计划接入：
-
-- FastAPI
-- Streamlit
-- LangChain
-- SiliconFlow OpenAI-compatible API
-- DeepSeek-V4-Flash
-- ACL Payload Filtering
-- Evidence Gate
-- Citation Formatter
-- Retrieval Evaluation
-- Generation Evaluation
-
-LangChain 在本项目中计划作为：
-
-```text
-组件生态
-```
-
-而不是：
-
-```text
-整个 RAG 架构唯一控制器
-```
-
-核心 Retrieval / Fusion / Rerank / Gate 逻辑仍保持显式实现和独立测试能力。
-
----
-
-## Development Setup
-
-### 1. Clone Repository
-
-```bash
-git clone <repository-url>
-cd enterprise-rag-compliance
-```
-
-### 2. Create Virtual Environment
-
-Windows PowerShell：
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-### 3. Install Project
-
-```powershell
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
-
-对于 NVIDIA GPU 环境，请根据 PyTorch 官方安装方式确保当前虚拟环境中的 PyTorch 可以访问 CUDA。
-
-检查：
-
-```powershell
-python scripts/check_torch_cuda.py
-```
-
-### 4. Start Qdrant
+启动：
 
 ```powershell
 docker compose up -d
@@ -1741,325 +1068,328 @@ docker compose ps
 Qdrant Dashboard：
 
 ```text
-http://localhost:6333/dashboard
-```
-
-### 5. Build Chunks
-
-```powershell
-python scripts/build_chunks.py
-```
-
-### 6. Validate Chunks
-
-```powershell
-python scripts/validate_chunks.py
-```
-
-### 7. Build Vector Index
-
-```powershell
-python scripts/build_vector_index.py
-```
-
-### 8. Run Tests
-
-```powershell
-pytest -v
+http://127.0.0.1:6333/dashboard
 ```
 
 ---
 
-## Security
+## Run FastAPI
 
-项目不会将真实 API Key 写入仓库。
+确保：
 
-本地配置：
+```text
+Qdrant 已启动
+.env 已配置
+知识库 chunks.jsonl 已生成
+Qdrant Collection 已构建
+```
+
+启动：
+
+```powershell
+python -m uvicorn enterprise_rag.api.app:app --log-level info
+```
+
+当前真实 Runtime 会在 Startup 阶段加载：
+
+```text
+BGE-M3
+BM25
+bge-reranker-v2-m3
+QueryService
+```
+
+启动成功后会看到：
+
+```text
+Starting RAG runtime...
+
+RAG runtime ready |
+chunks=49 |
+startup_ms=... |
+llm_model=deepseek-ai/DeepSeek-V4-Flash
+
+Application startup complete.
+```
+
+Swagger：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+OpenAPI：
+
+```text
+http://127.0.0.1:8000/openapi.json
+```
+
+---
+
+## Environment Variables
+
+真实密钥只保存在：
 
 ```text
 .env
 ```
 
-公开模板：
+示例：
+
+```env
+SILICONFLOW_API_KEY=your_api_key_here
+LLM_MODEL=deepseek-ai/DeepSeek-V4-Flash
+```
+
+`.env` 已加入 `.gitignore`。
+
+仓库只提交：
 
 ```text
 .env.example
 ```
 
-`.env` 已加入 `.gitignore`。
-
-后续 LLM API Key、外部服务 Token 等均通过环境变量读取。
-
-例如未来：
+禁止将真实 API Key 写入：
 
 ```text
-SILICONFLOW_API_KEY=...
-LLM_MODEL=deepseek-ai/DeepSeek-V4-Flash
+Python source code
+README
+Git history
 ```
-
-真实密钥不会提交 GitHub。
 
 ---
 
-## Development Roadmap
+## Build Knowledge Chunks
 
-### Phase 1 — Project Bootstrap
+```powershell
+python scripts/build_chunks.py
+```
 
-- [x] Python Project Structure
-- [x] `pyproject.toml`
-- [x] Environment Configuration
-- [x] Docker Compose
-- [x] Qdrant
+验证：
 
-### Phase 2 — Data Ingestion
-
-- [x] Document Manifest
-- [x] HTML Loader
-- [x] Article Extraction
-- [x] Text Normalizer
-- [x] Normalized Document
-- [x] Regulation Parser
-- [x] Structure-aware Chunking
-- [x] KnowledgeChunk
-- [x] JSONL Output
-- [x] Data Validation
-- [x] Unit / Regression Tests
-
-### Phase 3 — Embedding & Indexing
-
-- [x] PyTorch + CUDA
-- [x] BGE-M3 Embedding
-- [x] Embedding Batch Pipeline
-- [x] Token Length Analysis
-- [x] Qdrant Collection
-- [x] Stable Point ID
-- [x] Vector Upsert
-- [x] Payload Metadata
-- [x] Index Validation
-
-### Phase 4 — Retrieval
-
-- [x] Dense Retrieval
-- [x] BM25 Retrieval
-- [x] RRF Fusion
-- [x] Reranker
-- [x] Retrieval Sanity Check
-- [x] Local Latency Observation
-- [ ] ACL Filtering
-
-### Phase 5 — Generation
-
-- [ ] QueryService
-- [ ] Evidence Gate
-- [ ] Prompt Construction
-- [ ] LLM Generation
-- [ ] Citation
-- [ ] Refusal
-
-### Phase 6 — Application
-
-- [ ] FastAPI
-- [ ] `/health`
-- [ ] `/api/v1/retrieve`
-- [ ] `/api/v1/ask`
-- [ ] Streamlit
-- [ ] End-to-End Demo
-
-### Phase 7 — Evaluation
-
-- [ ] Evaluation Dataset
-- [ ] Dense Recall@K
-- [ ] BM25 Recall@K
-- [ ] Hybrid Recall@K
-- [ ] MRR
-- [ ] Rerank Comparison
-- [ ] Latency Comparison
-- [ ] Citation Accuracy
-- [ ] Faithfulness
-- [ ] Answer Correctness
-- [ ] Refusal Accuracy
-- [ ] ACL Leakage Test
-- [ ] Ablation Study
+```powershell
+python scripts/validate_chunks.py
+```
 
 ---
 
-## Evaluation Plan
+## Build Vector Index
 
-后续 Retrieval Evaluation 将至少对比：
+确保 Qdrant 已启动，然后：
 
-```text
-Dense Only
-vs
-BM25 Only
-vs
-Dense + BM25 + RRF
-vs
-Dense + BM25 + RRF + Reranker
+```powershell
+python scripts/build_vector_index.py
 ```
-
-主要指标：
-
-```text
-Recall@K
-MRR
-Latency
-```
-
-Generation 阶段计划评测：
-
-```text
-Faithfulness
-Answer Correctness
-Citation Accuracy
-Refusal Accuracy
-```
-
-ACL 阶段需要验证：
-
-> 未授权 Chunk 不进入候选集合，而不是召回后再过滤。
-
-最终希望形成类似：
-
-| Method | Recall@5 | Recall@20 | MRR | Latency |
-| --- | ---: | ---: | ---: | ---: |
-| Dense | TBD | TBD | TBD | TBD |
-| BM25 | TBD | TBD | TBD | TBD |
-| Hybrid RRF | TBD | TBD | TBD | TBD |
-| Hybrid + Rerank | TBD | TBD | TBD | TBD |
-
-在正式 Evaluation 完成前，README 中现有 Retrieval 结果均明确标记为：
-
-```text
-sanity check
-或
-local observation
-```
-
-避免把单条 Query 演示结果误写成正式评测指标。
 
 ---
 
-## Current Milestone
+## Tests
 
-当前已经完成：
+运行全部测试：
 
-```text
-Raw Regulation
-      ↓
-HTML Extraction
-      ↓
-Normalization
-      ↓
-Structure Parsing
-      ↓
-Structure-aware Chunking
-      ↓
-KnowledgeChunk
-      ↓
-chunks.jsonl
-      ↓
-Data Validation
-      ↓
-BGE-M3 Embedding
-      ↓
-Qdrant Vector Index
-      ↓
-Dense Retrieval ─────────┐
-                         ├─ RRF
-BM25 Retrieval ──────────┘
-                           ↓
-                        Top 20
-                           ↓
-                 bge-reranker-v2-m3
-                           ↓
-                       Final Top 5
+```powershell
+pytest -v
 ```
 
-当前已经验证：
+API Unit Test 使用 Fake Retriever / Fake QueryService，不加载真实 GPU Runtime，也不调用真实 LLM。
 
-```text
-2 篇公开法规
-49 个法规 Chunk
+真实 GPU / Qdrant / SiliconFlow 链路通过独立 Smoke Test 验证。
 
-BGE-M3 Dense Dimension = 1024
+---
 
-Dense + Qdrant
-BM25
-RRF
-Reranker
+## Smoke Tests
 
-全部能够在本地完整运行
+Retrieval Runtime：
+
+```powershell
+python scripts/check_api_retrieval_runtime.py
 ```
 
-当前 Retrieval V1 主干已经完成。
+完整 Ask Runtime：
 
-下一阶段：
+```powershell
+python scripts/check_api_ask_runtime.py
+```
+
+其他开发期检查脚本位于：
 
 ```text
-User Role
-   ↓
-ACL-aware Retrieval
-   ↓
-Hybrid Retrieval
-   ↓
-Reranker
-   ↓
-Evidence Gate
-   ↓
-LLM
-   ↓
-Answer / Refusal
-   ↓
-Citation
+scripts/
 ```
 
 ---
 
 ## Current Engineering Conclusions
 
-截至当前阶段：
+### 1. Structure-aware Chunking
 
-1. 法规类文档使用“条”作为主要 Chunk 边界能够较好保持完整法律语义。
-2. `content` 与 `retrieval_text` 分离，兼顾干净证据展示和检索上下文增强。
-3. `chunks.jsonl` 作为标准中间产物，使 Ingestion 与 Embedding / Vector Index 解耦。
-4. BGE-M3 Dense Embedding 当前实测为 1024 维。
-5. 当前法规 Chunk Token 长度全部低于 512，无输入截断。
-6. Brute-force Dense 与 Qdrant Dense 的基准 Top-5 排序保持一致。
-7. Dense 与 BM25 在法规知识库中具有互补特征。
-8. Dense 与 BM25 原始分数不可直接相加，因此 Hybrid 使用 RRF。
-9. RRF 能综合语义排名与关键词排名。
-10. Reranker 可以进一步对 Hybrid Candidate 做 Query-Passage Cross-Encoder 精排。
-11. 在当前 RTX 4060 Laptop 8GB 环境下，BGE-M3 与 Reranker 可以同时运行。
-12. 当前观察峰值专用显存约为 3.3GB。
-13. 当前单次 Retrieval Pipeline 本地观测约为 2 秒，Reranker 是主要耗时组件。
-14. 当前实验仍属于 sanity check，正式 Retrieval 收益必须通过 Evaluation Dataset 和消融实验量化。
-15. 后续 ACL 必须在检索阶段进行过滤，目标是未经授权的 Chunk 从源头不进入候选集合。
-16. Evidence Gate 阈值不会凭单个 Rerank Score 人工猜测，而会通过 answerable / unanswerable 评测集校准。
+法规类文档优先根据：
+
+```text
+Chapter / Article
+```
+
+切分，而不是机械固定字符长度。
+
+当前：
+
+```text
+1 Article = 1 Chunk
+```
 
 ---
 
-## License / Notice
+### 2. Hybrid Retrieval
 
-本项目主要使用公开法规与官方技术文档作为知识库数据来源。
+Dense 与 BM25 原始分数量纲不同，因此当前使用 RRF 做 rank-level fusion，而不是直接线性相加原始 score。
 
-项目用于：
+---
 
-- 学习
-- 技术研究
-- 工程实践
-- RAG 系统设计展示
+### 3. ACL
 
-本项目不构成法律意见。
+ACL 必须在 Candidate Generation 前限制 Authorized Search Space。
 
-如用于实际企业环境，应进一步完成：
+不采用：
 
 ```text
-数据授权
-安全审查
-权限体系
-日志审计
-模型与 Prompt 安全测试
-正式评测
+全库 Retrieval
+↓
+Post-filter
 ```
 
-等生产级工程要求。
+当前 synthetic mixed-access 全链路实验未发现 unauthorized result。
+
+---
+
+### 4. Rerank Relevance Is Not Answerability
+
+Hard Case 实验显示：
+
+```text
+Hard Positive
+与
+Hard Negative
+```
+
+的 rerank score 存在明显 overlap。
+
+因此：
+
+```text
+Cross-Encoder relevance score
+```
+
+不能作为唯一 Answerability 判断。
+
+---
+
+### 5. Evidence Control
+
+当前采用：
+
+```text
+Coarse Relevance Gate
++
+Evidence-Constrained Generation
++
+Output Validation
+```
+
+三层控制。
+
+明显 OOD Query 可以程序化拒绝。
+
+主题相关但 Evidence 缺少具体事实的问题，由 Evidence-Constrained Generation 继续执行 Structured Refusal。
+
+---
+
+### 6. Citation
+
+Citation ID 由 LLM 选择，但真实：
+
+```text
+title
+article
+source_url
+chunk_id
+```
+
+由程序根据 Evidence Mapping 确定。
+
+模型不能自由生成最终 Citation Metadata。
+
+---
+
+### 7. Runtime
+
+GPU 模型只在 FastAPI Application Startup 阶段初始化一次。
+
+HTTP Request 复用共享 Runtime，避免每请求重复加载模型。
+
+---
+
+## Evaluation Plan
+
+正式 Evaluation 将包含约：
+
+```text
+50–100 条 QA
+```
+
+并覆盖：
+
+```text
+Answerable
+Hard Positive
+Out-of-domain Unanswerable
+In-domain Unsupported Hard Negative
+```
+
+计划评测：
+
+```text
+Recall@K
+MRR
+Faithfulness
+Answer Correctness
+Refusal Accuracy
+Citation Accuracy
+ACL Leakage Rate
+Latency
+```
+
+Retrieval Ablation：
+
+```text
+Dense
+
+vs
+
+BM25
+
+vs
+
+Hybrid RRF
+
+vs
+
+Hybrid + Rerank
+```
+
+当前 README 中的 sanity / preliminary experiment 不视为正式 Benchmark。
+
+---
+
+## Repository
+
+GitHub repository:
+
+```text
+enterprise-rag-compliance1
+```
+
+---
+
+## License
+
+当前项目用于个人学习展示。
