@@ -1,5 +1,9 @@
 """测试 RerankedRetriever 的纯业务逻辑。"""
 
+from enterprise_rag.acl.models import (
+    AccessContext,
+    UserRole,
+)
 from enterprise_rag.retrieval.models import (
     HybridSearchResult,
     RetrievalCandidate,
@@ -34,13 +38,26 @@ def make_candidate(
 
 
 class FakeHybridRetriever:
-    """固定返回 Hybrid Candidate。"""
+    """
+    固定返回 Hybrid Candidate，
+    同时记录收到的 AccessContext。
+    """
+
+    def __init__(self) -> None:
+        self.last_access_context: (
+            AccessContext | None
+        ) = None
 
     def search(
         self,
         query: str,
         top_k: int,
+        access_context: AccessContext,
     ) -> list[HybridSearchResult]:
+        self.last_access_context = (
+            access_context
+        )
+
         candidates = [
             make_candidate("a"),
             make_candidate("b"),
@@ -79,12 +96,11 @@ class FakeHybridRetriever:
 
 class FakeRerankerService:
     """
-    固定返回 rerank score。
+    固定返回：
 
-    顺序对应：
-        a -> 1.0
-        b -> 5.0
-        c -> 3.0
+        a -> 1
+        b -> 5
+        c -> 3
     """
 
     def compute_scores(
@@ -99,17 +115,30 @@ class FakeRerankerService:
         ][:len(passages)]
 
 
-def test_reranker_reorders_hybrid_results() -> None:
-    """
-    Reranker 应根据 rerank_score
-    改变原来的 RRF 排名。
-    """
+def build_retriever(
+) -> tuple[
+    RerankedRetriever,
+    FakeHybridRetriever,
+]:
+    """创建测试用 RerankedRetriever。"""
+
+    hybrid = FakeHybridRetriever()
 
     retriever = RerankedRetriever(
-        hybrid_retriever=FakeHybridRetriever(),
-        reranker_service=FakeRerankerService(),
+        hybrid_retriever=hybrid,
+        reranker_service=(
+            FakeRerankerService()
+        ),
         candidate_top_k=3,
     )
+
+    return retriever, hybrid
+
+
+def test_reranker_reorders_hybrid_results() -> None:
+    """Reranker 应重新排序 Hybrid Candidate。"""
+
+    retriever, _ = build_retriever()
 
     results = retriever.search(
         query="测试问题",
@@ -127,16 +156,9 @@ def test_reranker_reorders_hybrid_results() -> None:
 
 
 def test_reranker_preserves_original_rrf_rank() -> None:
-    """
-    精排后仍应保留原始 RRF Rank，
-    方便 Debug 和评测。
-    """
+    """精排后仍应保留原始 RRF Rank。"""
 
-    retriever = RerankedRetriever(
-        hybrid_retriever=FakeHybridRetriever(),
-        reranker_service=FakeRerankerService(),
-        candidate_top_k=3,
-    )
+    retriever, _ = build_retriever()
 
     results = retriever.search(
         query="测试问题",
@@ -156,13 +178,9 @@ def test_reranker_preserves_original_rrf_rank() -> None:
 
 
 def test_reranker_rejects_invalid_top_k() -> None:
-    """top_k 不能大于候选池大小。"""
+    """最终 top_k 不能超过候选池。"""
 
-    retriever = RerankedRetriever(
-        hybrid_retriever=FakeHybridRetriever(),
-        reranker_service=FakeRerankerService(),
-        candidate_top_k=3,
-    )
+    retriever, _ = build_retriever()
 
     try:
         retriever.search(
@@ -177,3 +195,55 @@ def test_reranker_rejects_invalid_top_k() -> None:
         raise AssertionError(
             "预期应抛出 ValueError"
         )
+
+
+def test_reranker_propagates_access_context() -> None:
+    """
+    RerankedRetriever 必须将权限上下文
+    继续传给 HybridRetriever。
+    """
+
+    retriever, hybrid = (
+        build_retriever()
+    )
+
+    context = AccessContext(
+        role=UserRole.ADMIN
+    )
+
+    retriever.search(
+        query="测试问题",
+        top_k=3,
+        access_context=context,
+    )
+
+    assert (
+        hybrid.last_access_context
+        == context
+    )
+
+
+def test_reranker_default_access_is_guest() -> None:
+    """
+    RerankedRetriever 未收到 AccessContext 时，
+    必须默认 guest。
+    """
+
+    retriever, hybrid = (
+        build_retriever()
+    )
+
+    retriever.search(
+        query="测试问题",
+        top_k=3,
+    )
+
+    assert (
+        hybrid.last_access_context
+        is not None
+    )
+
+    assert (
+        hybrid.last_access_context.role
+        == UserRole.GUEST
+    )

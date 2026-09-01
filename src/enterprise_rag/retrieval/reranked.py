@@ -1,5 +1,9 @@
-"""Hybrid Retrieval + BGE Reranker。"""
+"""ACL-aware Hybrid Retrieval + BGE Reranker。"""
 
+from enterprise_rag.acl.models import (
+    AccessContext,
+    UserRole,
+)
 from enterprise_rag.reranking.bge_reranker import (
     BGERerankerService,
 )
@@ -13,23 +17,30 @@ from enterprise_rag.retrieval.models import (
 
 class RerankedRetriever:
     """
-    Hybrid + Reranker 两阶段检索器。
+    ACL-aware Hybrid + Reranker 两阶段检索器。
 
     当前流程：
 
-        Dense Top20
-            \
-             → RRF Top20
-            /
-        BM25 Top20
-
-             ↓
-
+        AccessContext
+             │
+             ▼
+       Hybrid Retriever
+        /            \
+     Dense           BM25
+    ACL Filter     ACL Corpus
+        |            /
+             RRF
+              ↓
+        Hybrid Top-K
+              ↓
         BGE Reranker
+              ↓
+         Final Top-K
 
-             ↓
+    Reranker 本身不负责 ACL。
 
-        Final Top5
+    它只精排 Hybrid Retriever
+    已经授权的 Candidate。
     """
 
     def __init__(
@@ -43,8 +54,7 @@ class RerankedRetriever:
 
         参数：
             hybrid_retriever:
-                已构建的 Dense + BM25 + RRF
-                检索器。
+                ACL-aware Hybrid Retriever。
 
             reranker_service:
                 BGE Cross-Encoder Reranker。
@@ -75,16 +85,23 @@ class RerankedRetriever:
         self,
         query: str,
         top_k: int = 5,
+        access_context: AccessContext | None = None,
     ) -> list[RerankedSearchResult]:
         """
-        执行 Hybrid Retrieval + Rerank。
+        执行 ACL-aware Hybrid Retrieval + Rerank。
 
         参数：
             query:
-                用户问题。
+                用户自然语言问题。
 
             top_k:
-                最终返回的精排结果数量。
+                最终精排返回数量。
+
+            access_context:
+                当前请求访问控制上下文。
+
+                未提供时默认 guest，
+                遵循最小权限原则。
         """
 
         if not query.strip():
@@ -102,14 +119,20 @@ class RerankedRetriever:
                 "top_k 不能大于 candidate_top_k"
             )
 
+        if access_context is None:
+            access_context = AccessContext(
+                role=UserRole.GUEST
+            )
+
         # --------------------------------------------------
-        # 1. Hybrid Retrieval
+        # 1. ACL-aware Hybrid Retrieval
         # --------------------------------------------------
 
         hybrid_results = (
             self.hybrid_retriever.search(
                 query=query,
                 top_k=self.candidate_top_k,
+                access_context=access_context,
             )
         )
 
@@ -117,7 +140,10 @@ class RerankedRetriever:
             return []
 
         # --------------------------------------------------
-        # 2. 准备 Cross-Encoder Passage
+        # 2. 准备 Cross-Encoder 输入
+        #
+        # 注意：
+        # 此时这些 Candidate 已经经过 ACL。
         # --------------------------------------------------
 
         passages = [
@@ -126,7 +152,7 @@ class RerankedRetriever:
         ]
 
         # --------------------------------------------------
-        # 3. Query + Passage → Rerank Scores
+        # 3. Query + Passage → Rerank Score
         # --------------------------------------------------
 
         rerank_scores = (
@@ -147,7 +173,7 @@ class RerankedRetriever:
             )
 
         # --------------------------------------------------
-        # 4. 构建 RerankedSearchResult
+        # 4. 构建精排结果
         # --------------------------------------------------
 
         reranked_results: list[
@@ -173,9 +199,7 @@ class RerankedRetriever:
                     rerank_score=float(
                         rerank_score
                     ),
-                    original_rank=(
-                        original_rank
-                    ),
+                    original_rank=original_rank,
                     rrf_score=(
                         hybrid_result.rrf_score
                     ),
@@ -189,7 +213,7 @@ class RerankedRetriever:
             )
 
         # --------------------------------------------------
-        # 5. 根据 Cross-Encoder 分数重新排序
+        # 5. Cross-Encoder 精排
         # --------------------------------------------------
 
         reranked_results.sort(
