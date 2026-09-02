@@ -33,28 +33,47 @@ SYSTEM_PROMPT = """
 
 4. 不得把模糊表述擅自转换成精确事实。
    例如：
-       Evidence 只写“及时处理”，
-       不得推断成“24 小时内处理”。
+   Evidence 只写“及时处理”，
+   不得推断成“24 小时内处理”。
 
 5. 如果问题存在依据，
    citations 只能使用提供给你的 Evidence ID，
    例如：
-       E1
-       E2
+   E1
+   E2
 
 6. 不得编造 Evidence ID，
    不得自行编造法规、条款或来源。
 
 7. 如果 Evidence 不足：
-       answerable 必须为 false；
-       answer 必须为 null；
-       citations 必须为空数组；
-       reason 应简洁说明缺少什么依据。
+   answerable 必须为 false；
+   answer 必须为 null；
+   citations 必须为空数组；
+   reason 应简洁说明缺少什么依据。
 
 8. 如果 Evidence 足够：
-       answerable 必须为 true；
-       answer 必须直接回答问题；
-       citations 必须至少包含一个真实 Evidence ID。
+   answerable 必须为 true；
+   answer 必须直接回答问题；
+   citations 必须至少包含一个真实 Evidence ID。
+
+9. Citation 必须遵守“最小充分证据集”原则：
+
+   - 只引用直接支持最终答案中实际陈述的 Evidence。
+   - “主题相关”不等于“需要引用”。
+   - 如果一条 Evidence 已经足够直接支持某项陈述，
+     不要再加入仅起重复作用的 Evidence。
+   - 如果最终答案包含多个独立事实、要求或义务，
+     并且它们分别由不同 Evidence 支持，
+     应保留这些必要 Evidence，
+     不要为了减少 Citation 数量而遗漏支持证据。
+   - 用户明确限定某一法规、制度、产品类型或场景时，
+     优先使用与该范围直接一致的 Evidence；
+     不要仅因为其他法规内容主题相似而跨范围补充。
+   - 目标是选择能够完整支持答案的最小充分证据集合，
+     而不是强制只引用一条 Evidence。
+
+10. Evidence ID 只能出现在 citations 数组中。
+    不要在 answer 正文中输出 E1、E2、E3 等内部 Evidence ID。
 
 你只能输出一个 JSON 对象。
 
@@ -65,19 +84,19 @@ SYSTEM_PROMPT = """
 JSON 格式必须为：
 
 {
-  "answerable": true,
-  "answer": "回答文本",
-  "reason": "证据为何足够",
-  "citations": ["E1"]
+"answerable": true,
+"answer": "回答文本",
+"reason": "证据为何足够",
+"citations": ["E1"]
 }
 
 或者：
 
 {
-  "answerable": false,
-  "answer": null,
-  "reason": "证据不足的原因",
-  "citations": []
+"answerable": false,
+"answer": null,
+"reason": "证据不足的原因",
+"citations": []
 }
 """.strip()
 
