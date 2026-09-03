@@ -60,6 +60,14 @@ class BM25Retriever:
         不进入当前角色 BM25 corpus
             ↓
         不参与 BM25 candidate generation
+
+    Day 6 开始：
+
+    KnowledgeChunk 不再只有法规结构，
+    因此生成 RetrievalCandidate 时还必须保留：
+
+        section_title
+        section_path
     """
 
     def __init__(
@@ -70,6 +78,7 @@ class BM25Retriever:
         初始化 BM25 Retriever。
 
         参数：
+
             chunks:
                 全部 KnowledgeChunk。
 
@@ -149,6 +158,17 @@ class BM25Retriever:
         - 不修改 BM25 k1 / b；
 
         保留可解释 baseline。
+
+        注意：
+
+        Day 6 后语料会出现英文技术文档。
+
+        当前仍暂时保留 Jieba baseline，
+        不在 Schema Upgrade 阶段同时修改
+        Sparse Retrieval Tokenization。
+
+        后续 Corpus v2 Retrieval Regression
+        会专门观察其跨语言弱点。
         """
 
         if not text.strip():
@@ -175,6 +195,7 @@ class BM25Retriever:
         执行 ACL-aware BM25 Retrieval。
 
         参数：
+
             query:
                 用户自然语言问题。
 
@@ -185,12 +206,15 @@ class BM25Retriever:
                 当前用户角色。
 
                 默认：
+
                     guest
 
                 即默认使用最小权限：
+
                     public only
 
         返回：
+
             仅来自当前角色授权语料的
             BM25SearchResult。
         """
@@ -263,20 +287,58 @@ class BM25Retriever:
 
             candidate = RetrievalCandidate(
                 chunk_id=chunk.chunk_id,
+
                 document_id=chunk.document_id,
+
                 title=chunk.title,
-                document_type=chunk.document_type,
+
+                document_type=(
+                    chunk.document_type
+                ),
+
                 language=chunk.language,
+
                 version=chunk.version,
-                chapter_number=chunk.chapter_number,
-                chapter_title=chunk.chapter_title,
-                article_number=chunk.article_number,
+
+                # 法规文档使用以下字段；
+                # 技术文档允许为 None。
+                chapter_number=(
+                    chunk.chapter_number
+                ),
+
+                chapter_title=(
+                    chunk.chapter_title
+                ),
+
+                article_number=(
+                    chunk.article_number
+                ),
+
                 content=chunk.content,
-                retrieval_text=chunk.retrieval_text,
+
+                retrieval_text=(
+                    chunk.retrieval_text
+                ),
+
                 source_url=chunk.source_url,
-                access_level=chunk.access_level,
+
+                access_level=(
+                    chunk.access_level
+                ),
+
                 chunk_index=chunk.chunk_index,
+
                 content_hash=chunk.content_hash,
+
+                # Day 6：
+                # 保留通用 Section Metadata。
+                section_title=(
+                    chunk.section_title
+                ),
+
+                section_path=(
+                    chunk.section_path
+                ),
             )
 
             results.append(

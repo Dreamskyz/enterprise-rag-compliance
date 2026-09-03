@@ -66,11 +66,33 @@ RetrieverCallable = Callable[
 class RetrievalQueryEvalResult:
     """
     单条 Query、单种 Method 的评测结果。
+
+    role:
+
+        表示这次 Retrieval
+        实际使用的用户角色。
+
+        记录这个字段非常重要，
+        因为同一个 Query：
+
+            guest
+
+        和：
+
+            developer
+
+        实际搜索的是不同的授权 Candidate Space。
+
+        如果结果对象不记录 role，
+        后续 Failure Analysis 很容易丢失
+        这层关键实验上下文。
     """
 
     query_id: str
 
     query: str
+
+    role: UserRole
 
     method: RetrievalMethod
 
@@ -146,7 +168,64 @@ def evaluate_retrieval_method(
     使用统一 Dataset / Metrics
     评估一种 Retrieval Method。
 
-    当前只统计 answerable=true 的 Case。
+    当前只统计：
+
+        answerable=true
+
+    的 Case。
+
+    ------------------------------------------------------
+    Role-aware Evaluation
+    ------------------------------------------------------
+
+    默认情况下：
+
+        每条 RetrievalEvalCase
+        使用自己的：
+
+            case.role
+
+    构造：
+
+        AccessContext(role=case.role)
+
+    因此 V2 Dataset 可以同时包含：
+
+        guest case
+        developer case
+        admin case
+
+    同一个评测运行中，
+    每条 Query 都可以在自己的
+    ACL Candidate Space 内执行。
+
+    ------------------------------------------------------
+    access_context 参数
+    ------------------------------------------------------
+
+    这个参数保留下来作为：
+
+        explicit global override
+
+    即：
+
+        如果 access_context is not None
+
+    则所有 Case 都使用该 Context，
+    暂时忽略 Dataset 中的 case.role。
+
+    这样可以兼容项目里已有的：
+
+        测试
+        Debug Script
+        临时实验
+
+    也避免一次 schema evolution
+    破坏原有 Runner API。
+
+    正式 Dataset Evaluation
+    默认不传 access_context，
+    让 Dataset 自身成为 role 的事实来源。
     """
 
     if retrieval_top_k <= 0:
@@ -182,11 +261,6 @@ def evaluate_retrieval_method(
             "不能超过 retrieval_top_k"
         )
 
-    if access_context is None:
-        access_context = AccessContext(
-            role=UserRole.GUEST
-        )
-
     answerable_cases = [
         case
         for case in cases
@@ -204,6 +278,32 @@ def evaluate_retrieval_method(
     ] = []
 
     for case in answerable_cases:
+
+        # --------------------------------------------------
+        # 1. 为当前 Case 决定实际 AccessContext。
+        # --------------------------------------------------
+        #
+        # 默认：
+        #
+        #     Dataset role
+        #
+        # 显式传入 access_context 时：
+        #
+        #     global override
+        #
+        # 这使正式评测能够 role-aware，
+        # 同时保持旧 API 的兼容性。
+        if access_context is None:
+            case_access_context = AccessContext(
+                role=case.role
+            )
+        else:
+            case_access_context = access_context
+
+        # --------------------------------------------------
+        # 2. 执行 Retrieval。
+        # --------------------------------------------------
+
         started_at = (
             perf_counter()
         )
@@ -211,7 +311,7 @@ def evaluate_retrieval_method(
         results = retrieve_fn(
             case.query,
             retrieval_top_k,
-            access_context,
+            case_access_context,
         )
 
         latency_ms = (
@@ -224,6 +324,10 @@ def evaluate_retrieval_method(
                 results
             )
         )
+
+        # --------------------------------------------------
+        # 3. 计算不同 K 下 Retrieval Metrics。
+        # --------------------------------------------------
 
         metrics_by_k: dict[
             int,
@@ -243,6 +347,10 @@ def evaluate_retrieval_method(
                 )
             )
 
+        # --------------------------------------------------
+        # 4. 保存 Query-level Evaluation Result。
+        # --------------------------------------------------
+
         query_results.append(
             RetrievalQueryEvalResult(
                 query_id=(
@@ -250,6 +358,9 @@ def evaluate_retrieval_method(
                 ),
                 query=(
                     case.query
+                ),
+                role=(
+                    case_access_context.role
                 ),
                 method=method,
                 retrieved_chunk_ids=tuple(
@@ -267,6 +378,10 @@ def evaluate_retrieval_method(
             )
         )
 
+    # ------------------------------------------------------
+    # 5. Aggregate Metrics。
+    # ------------------------------------------------------
+
     aggregate_by_k: dict[
         int,
         RetrievalAggregateMetrics,
@@ -283,6 +398,28 @@ def evaluate_retrieval_method(
                 metric_results
             )
         )
+
+    # ------------------------------------------------------
+    # 6. 当前保留 Query-level mean latency。
+    #
+    # 注意：
+    #
+    # 这个字段只属于 Retrieval Runner
+    # 的粗粒度诊断信息。
+    #
+    # 项目正式 latency 结论来自：
+    #
+    # Query-level Interleaved Benchmark
+    #
+    # 通过随机化不同 Method 的执行顺序，
+    # 控制：
+    #
+    # GPU Warm-State
+    # Method Order Bias
+    #
+    # 因此这里的 mean_latency_ms
+    # 不应该替代正式 latency benchmark。
+    # ------------------------------------------------------
 
     mean_latency_ms = (
         sum(

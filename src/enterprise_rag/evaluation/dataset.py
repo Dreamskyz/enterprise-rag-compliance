@@ -3,6 +3,9 @@
 import json
 from pathlib import Path
 
+from enterprise_rag.acl.models import (
+    UserRole,
+)
 from enterprise_rag.evaluation.models import (
     RetrievalEvalCase,
     RetrievalEvalCategory,
@@ -19,11 +22,40 @@ def read_retrieval_eval_jsonl(
 
     每一行是一条独立 JSON。
 
-    当前 Dataset 同时包含：
+    当前 Dataset 同时可以包含：
 
         Retrieval Gold
         Citation Gold
         Answerability Gold
+        Retrieval Role
+
+    关于 role：
+
+    retrieval_eval_v1.jsonl
+    是已经冻结的历史 Regression Dataset。
+
+    它创建时没有显式 role 字段，
+    当时 Retrieval Runner 默认使用：
+
+        guest
+
+    所以为了保证历史评测语义不发生变化：
+
+        缺少 role
+        -> 默认 UserRole.GUEST
+
+    新的 V2 Dataset
+    则应该显式填写：
+
+        "role": "guest"
+
+    或：
+
+        "role": "developer"
+
+    这样 Dataset 本身就能完整描述
+    一条 Retrieval Evaluation Case
+    所对应的授权 Candidate Space。
     """
 
     if not input_path.exists():
@@ -111,6 +143,26 @@ def read_retrieval_eval_jsonl(
             )
 
             # ==================================================
+            # 1.1 Retrieval Role。
+            # ==================================================
+            #
+            # V1 Dataset 没有 role 字段。
+            #
+            # 不能因此修改已经冻结的 V1 文件，
+            # 而应该由 Loader 提供历史兼容行为：
+            #
+            #     missing role
+            #     -> guest
+            #
+            # 这正好与原 Runner 的默认角色一致。
+            role_raw = str(
+                data.get(
+                    "role",
+                    UserRole.GUEST.value,
+                )
+            ).strip()
+
+            # ==================================================
             # 2. 基础 Validation。
             # ==================================================
 
@@ -187,7 +239,30 @@ def read_retrieval_eval_jsonl(
                 ) from exc
 
             # ==================================================
-            # 4. Gold Chunk IDs。
+            # 4. User Role。
+            # ==================================================
+            #
+            # Dataset 不允许未知角色静默回退到 guest。
+            #
+            # 例如：
+            #
+            #     "role": "developr"
+            #
+            # 必须 fail-fast，
+            # 否则一个拼写错误就会悄悄改变 ACL Candidate Space。
+            try:
+                role = UserRole(
+                    role_raw
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    f"{query_id} "
+                    "role 非法："
+                    f"{role_raw}"
+                ) from exc
+
+            # ==================================================
+            # 5. Gold Chunk IDs。
             # ==================================================
 
             gold_chunk_ids = tuple(
@@ -204,7 +279,7 @@ def read_retrieval_eval_jsonl(
             )
 
             # ==================================================
-            # 5. Answerability 与 Gold 一致性。
+            # 6. Answerability 与 Gold 一致性。
             # ==================================================
 
             if answerable:
@@ -247,6 +322,10 @@ def read_retrieval_eval_jsonl(
                         "必须为 false"
                     )
 
+            # ==================================================
+            # 7. 保存 Case。
+            # ==================================================
+
             seen_query_ids.add(
                 query_id
             )
@@ -271,6 +350,7 @@ def read_retrieval_eval_jsonl(
                     strict_citation_eval=(
                         strict_citation_eval
                     ),
+                    role=role,
                 )
             )
 

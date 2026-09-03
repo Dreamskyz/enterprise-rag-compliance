@@ -12,14 +12,47 @@ class RetrievalCandidate:
     Chunk 基础信息工作。
 
     这样可以避免每个检索阶段都复制一套
-    title/content/source_url 等字段。
+    title / content / source_url 等字段定义。
+
+    Day 6 开始，知识库从纯法规扩展为：
+
+        regulation
+        security_guideline
+        technical_documentation
+
+    因此 RetrievalCandidate 同样需要支持两类结构元数据：
+
+        法规结构：
+            chapter_number
+            chapter_title
+            article_number
+
+        通用 Section 结构：
+            section_title
+            section_path
+
+    注意：
+
+    RetrievalCandidate 是 Retrieval 层的统一 Contract。
+
+    KnowledgeChunk 中能够用于检索结果展示、
+    Citation 和 Debug 的结构信息，
+    进入 RetrievalCandidate 后不能被丢失。
     """
 
     chunk_id: str
 
+    # ======================================================
+    # 文档身份。
+    # ======================================================
+
     document_id: str
 
     title: str
+
+    # ======================================================
+    # 文档级元数据。
+    # ======================================================
 
     document_type: str
 
@@ -27,23 +60,75 @@ class RetrievalCandidate:
 
     version: str
 
-    chapter_number: str
+    # ======================================================
+    # 法规结构。
+    #
+    # 法规文档：
+    #
+    #   chapter_number="第二章"
+    #   chapter_title="技术发展与治理"
+    #   article_number="第七条"
+    #
+    # 技术文档 / 安全规范：
+    #
+    #   chapter_number=None
+    #   chapter_title=None
+    #   article_number=None
+    #
+    # 因此这里必须允许 None。
+    # ======================================================
 
-    chapter_title: str
+    chapter_number: str | None
 
-    article_number: str
+    chapter_title: str | None
+
+    article_number: str | None
+
+    # ======================================================
+    # 文本。
+    # ======================================================
 
     content: str
 
     retrieval_text: str
 
+    # ======================================================
+    # 来源与权限。
+    # ======================================================
+
     source_url: str
 
     access_level: str
 
+    # ======================================================
+    # Chunk 内部信息。
+    # ======================================================
+
     chunk_index: int
 
     content_hash: str
+
+    # ======================================================
+    # 通用 Section 结构。
+    #
+    # Day 6 新增。
+    #
+    # 对旧法规 Candidate 来说默认都是 None，
+    # 因而保持向后兼容。
+    #
+    # 示例：
+    #
+    # section_title:
+    #     "Classes as Dependencies"
+    #
+    # section_path:
+    #     "Tutorial > Dependencies > "
+    #     "Classes as Dependencies"
+    # ======================================================
+
+    section_title: str | None = None
+
+    section_path: str | None = None
 
 
 @dataclass(frozen=True)

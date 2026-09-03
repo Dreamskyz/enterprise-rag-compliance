@@ -1,7 +1,12 @@
 documents:
+
+  # ==========================================================
+  # 1. 中国法规
+  # ==========================================================
+
   - document_id: cn_genai_interim_2023
     title: 生成式人工智能服务管理暂行办法
-    source_url: https://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm
+    source_url: "https://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm"
     source_type: official
     document_type: regulation
     language: zh-CN
@@ -14,7 +19,7 @@ documents:
 
   - document_id: cn_deep_synthesis_2022
     title: 互联网信息服务深度合成管理规定
-    source_url: https://www.cac.gov.cn/2022-12/11/c_1672221949354811.htm
+    source_url: "https://www.cac.gov.cn/2022-12/11/c_1672221949354811.htm"
     source_type: official
     document_type: regulation
     language: zh-CN
@@ -23,4 +28,72 @@ documents:
     effective_at: "2023-01-10"
     access_level: public
     local_path: data/raw/cn_deep_synthesis_2022.html
+    enabled: true
+
+  # ==========================================================
+  # 2. OWASP 安全规范
+  # ==========================================================
+
+  - document_id: owasp_llm01_prompt_injection_2025
+    title: "LLM01:2025 Prompt Injection"
+    source_url: "https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+    source_type: official
+    document_type: security_guideline
+    language: en
+    version: "2025"
+    published_at: null
+    effective_at: null
+    access_level: public
+    local_path: data/raw/owasp_llm01_prompt_injection_2025.html
+    enabled: true
+
+  # ==========================================================
+  # 3. FastAPI 官方技术文档
+  # ==========================================================
+  #
+  # 注意：
+  #
+  # FastAPI 官网本身是公开资料。
+  #
+  # 这里人为设置：
+  #
+  #     access_level: developer
+  #
+  # 是为了模拟企业内部知识库中的
+  # “研发技术规范仅开发人员可见”场景，
+  # 用来演示 ACL pre-filter。
+  #
+  # README 中必须明确说明：
+  # 这只是项目中的 synthetic ACL policy，
+  # 并不是原始资料真实的访问权限。
+  #
+  # version 使用本地语料快照日期，
+  # 而不是假装它是某个 FastAPI package version。
+  # 这样未来官网更新后，我们仍然知道
+  # 当前知识库是基于哪一次下载快照构建的。
+
+  - document_id: fastapi_dependencies
+    title: "FastAPI Dependencies"
+    source_url: "https://fastapi.tiangolo.com/tutorial/dependencies/"
+    source_type: official
+    document_type: technical_documentation
+    language: en
+    version: "snapshot-2026-09-03"
+    published_at: null
+    effective_at: null
+    access_level: developer
+    local_path: data/raw/fastapi_dependencies.html
+    enabled: true
+
+  - document_id: fastapi_lifespan
+    title: "FastAPI Lifespan Events"
+    source_url: "https://fastapi.tiangolo.com/advanced/events/"
+    source_type: official
+    document_type: technical_documentation
+    language: en
+    version: "snapshot-2026-09-03"
+    published_at: null
+    effective_at: null
+    access_level: developer
+    local_path: data/raw/fastapi_lifespan.html
     enabled: true

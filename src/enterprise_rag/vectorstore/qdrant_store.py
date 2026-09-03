@@ -41,6 +41,17 @@ class QdrantVectorStore:
     1. 连接 Qdrant；
     2. 创建 Collection；
     3. 将 KnowledgeChunk + Dense Vector 写入 Qdrant。
+
+    Day 6 开始：
+
+    Qdrant Payload 同时保存：
+
+        法规结构 metadata
+        +
+        通用 section metadata
+
+    从而保证异构文档进入向量库后，
+    原始结构上下文不会丢失。
     """
 
     def __init__(
@@ -65,8 +76,11 @@ class QdrantVectorStore:
         创建 Dense Vector Collection。
 
         参数：
+
             recreate:
+
                 True 时删除旧 Collection 后重新创建。
+
                 仅用于开发阶段明确需要重建索引时。
         """
 
@@ -97,8 +111,23 @@ class QdrantVectorStore:
         """
         将 KnowledgeChunk 转换成 Qdrant Payload。
 
-        Payload 中保留后续检索、Citation、
-        ACL 和 Debug 所需要的字段。
+        Payload 中保留后续：
+
+            Retrieval
+            Citation
+            ACL
+            Debug
+
+        所需要的字段。
+
+        Day 6 新增：
+
+            section_title
+            section_path
+
+        这样 OWASP、FastAPI、Qdrant 等
+        非法规文档进入向量数据库后，
+        仍然能够保留原始 Section 层级信息。
         """
 
         return {
@@ -110,9 +139,18 @@ class QdrantVectorStore:
             "language": chunk.language,
             "version": chunk.version,
 
+            # 法规专属结构。
+            #
+            # 对技术文档来说，这些字段允许为 None。
             "chapter_number": chunk.chapter_number,
             "chapter_title": chunk.chapter_title,
             "article_number": chunk.article_number,
+
+            # 通用 Section 结构。
+            #
+            # 对旧法规 Chunk 来说通常为 None。
+            "section_title": chunk.section_title,
+            "section_path": chunk.section_path,
 
             "content": chunk.content,
             "retrieval_text": chunk.retrieval_text,
@@ -151,8 +189,11 @@ class QdrantVectorStore:
         将 Chunk 和对应 Dense Vector 写入 Qdrant。
 
         要求：
+
             chunks[i]
+
         必须对应：
+
             vectors[i]
         """
 

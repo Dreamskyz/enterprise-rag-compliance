@@ -1,5 +1,7 @@
 """运行 Retrieval Ablation Evaluation。"""
 
+import argparse
+from collections import Counter
 from pathlib import Path
 
 from enterprise_rag.acl.models import (
@@ -12,9 +14,12 @@ from enterprise_rag.evaluation.dataset import (
     read_retrieval_eval_jsonl,
 )
 from enterprise_rag.evaluation.retrieval_analysis import (
+    find_gold_miss_cases,
+    find_non_top1_gold_cases,
     find_rank_degradations,
     find_rank_improvements,
     print_comparison_cases,
+    print_method_failure_cases,
 )
 from enterprise_rag.evaluation.retrieval_report import (
     print_retrieval_summary,
@@ -45,11 +50,33 @@ from enterprise_rag.retrieval.reranked import (
 
 # ==========================================================
 # Evaluation Dataset。
+#
+# V1:
+#     冻结的历史 Regression Benchmark。
+#
+# V2:
+#     当前 Corpus V2 Capability Benchmark。
+#
+# 不通过修改代码切换 Dataset，
+# 而是通过：
+#
+#     --dataset v1
+#     --dataset v2
+#
+# 显式选择。
 # ==========================================================
 
-EVAL_PATH = Path(
-    "data/eval/retrieval_eval_v1.jsonl"
-)
+EVAL_PATHS: dict[
+    str,
+    Path,
+] = {
+    "v1": Path(
+        "data/eval/retrieval_eval_v1.jsonl"
+    ),
+    "v2": Path(
+        "data/eval/retrieval_eval_v2.jsonl"
+    ),
+}
 
 
 # ==========================================================
@@ -63,8 +90,6 @@ CHUNKS_PATH = Path(
 
 # ==========================================================
 # 所有 Retrieval Method 使用完全相同的 Evaluation K。
-#
-# 后续统一比较：
 #
 # Recall@1
 # Recall@3
@@ -83,20 +108,66 @@ EVALUATION_KS = [
 
 # ==========================================================
 # 每种 Retriever 最终至少返回 Top10，
-# 这样才能公平计算 Recall@10 / MRR@10。
+# 才能公平计算 Recall@10 / MRR@10。
 #
-# 注意：
-#
-# Hybrid 内部仍然可以使用：
+# Hybrid 内部仍然使用：
 #
 # Dense Top20
 # BM25 Top20
 # Hybrid Top20
 #
-# 这里只控制 Evaluation 最终观察的 Ranked Results 数量。
+# 这里只控制 Evaluation
+# 最终观察的 Ranked Results 数量。
 # ==========================================================
 
 RETRIEVAL_TOP_K = 10
+
+
+def parse_args() -> argparse.Namespace:
+    """
+    解析命令行参数。
+
+    默认保持：
+
+        v1
+
+    原因：
+
+    在加入 --dataset 参数之前，
+    当前脚本历史上一直运行的就是：
+
+        retrieval_eval_v1.jsonl
+
+    CLI 演化不应该偷偷改变
+    旧命令的实验语义。
+
+    Corpus V2 正式评测时显式执行：
+
+        python scripts/run_retrieval_eval.py --dataset v2
+    """
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run retrieval ablation evaluation "
+            "on a selected evaluation dataset."
+        )
+    )
+
+    parser.add_argument(
+        "--dataset",
+        choices=sorted(
+            EVAL_PATHS.keys()
+        ),
+        default="v1",
+        help=(
+            "Evaluation dataset version. "
+            "v1=frozen regression benchmark, "
+            "v2=current Corpus V2 benchmark. "
+            "Default: v1."
+        ),
+    )
+
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -108,14 +179,48 @@ def main() -> None:
         Hybrid RRF
         Hybrid + Rerank
 
-    当前 Retrieval Recall / MRR
-    只评估：
+    Retrieval Recall / MRR
+    当前只评估：
 
         answerable = true
 
     Unanswerable Query 后续进入：
-        Refusal Evaluation。
+
+        Refusal Evaluation
+
+    ------------------------------------------------------
+    Role-aware Evaluation
+    ------------------------------------------------------
+
+    Dataset 中每条 Case
+    可以携带自己的：
+
+        role
+
+    Retrieval Runner 会根据：
+
+        case.role
+
+    为每条 Query
+    构造自己的 AccessContext。
+
+    因此 V2 可以在一次评测中同时包含：
+
+        guest
+        developer
+
+    而不会绕过生产 ACL。
     """
+
+    args = parse_args()
+
+    dataset_version = str(
+        args.dataset
+    )
+
+    eval_path = EVAL_PATHS[
+        dataset_version
+    ]
 
     print("=" * 100)
     print(
@@ -124,12 +229,12 @@ def main() -> None:
     print("=" * 100)
 
     # ======================================================
-    # 1. 读取统一 Evaluation Dataset。
+    # 1. 读取指定 Evaluation Dataset。
     # ======================================================
 
     cases = (
         read_retrieval_eval_jsonl(
-            EVAL_PATH
+            eval_path
         )
     )
 
@@ -147,6 +252,26 @@ def main() -> None:
         if case.answerable
     )
 
+    unanswerable_count = (
+        len(cases)
+        - answerable_count
+    )
+
+    role_counts = Counter(
+        case.role.value
+        for case in cases
+    )
+
+    print(
+        "Dataset version:",
+        dataset_version,
+    )
+
+    print(
+        "Dataset path:",
+        eval_path,
+    )
+
     print(
         "Eval cases:",
         len(cases),
@@ -158,14 +283,22 @@ def main() -> None:
     )
 
     print(
+        "Unanswerable cases:",
+        unanswerable_count,
+    )
+
+    print(
+        "Role distribution:",
+        dict(role_counts),
+    )
+
+    print(
         "Knowledge chunks:",
         len(chunks),
     )
 
     # ======================================================
     # 3. 初始化 Retrieval Runtime。
-    #
-    # 非常重要：
     #
     # 以下组件只初始化一次。
     #
@@ -180,9 +313,10 @@ def main() -> None:
     )
 
     # ------------------------------------------------------
-    # BGE-M3：
+    # BGE-M3。
     #
-    # Dense 和 Hybrid 共用同一实例。
+    # Dense 和 Hybrid
+    # 共用同一 Embedding 实例。
     # ------------------------------------------------------
 
     embedding_service = (
@@ -200,9 +334,10 @@ def main() -> None:
     )
 
     # ------------------------------------------------------
-    # BM25：
+    # BM25。
     #
-    # 只根据当前 Chunk Corpus 构建一次。
+    # 只根据当前 Chunk Corpus
+    # 构建一次。
     # ------------------------------------------------------
 
     bm25_retriever = BM25Retriever(
@@ -232,7 +367,7 @@ def main() -> None:
     )
 
     # ------------------------------------------------------
-    # Cross-Encoder Reranker：
+    # Cross-Encoder Reranker。
     #
     # 只加载一次。
     # ------------------------------------------------------
@@ -265,15 +400,15 @@ def main() -> None:
     # ======================================================
     # 4. Adapter Layer。
     #
-    # Evaluation Runner 只认识：
+    # Evaluation Runner 统一调用：
     #
     #     (query, top_k, access_context)
     #
-    # 但是生产 Retriever 的 search()
+    # 生产 Retriever 的 search()
     # 参数形式可能略有不同。
     #
-    # 因此这里只在 Evaluation 层适配，
-    # 不修改已经稳定的生产 Retriever API。
+    # 因此只在 Evaluation Layer 做适配，
+    # 不修改生产 Retriever API。
     # ======================================================
 
     def dense_adapter(
@@ -343,6 +478,15 @@ def main() -> None:
     # ======================================================
     # 5. 使用同一 Dataset / Metrics
     #    分别评估四种 Retrieval Method。
+    #
+    # 不传全局 access_context。
+    #
+    # 因此 Retrieval Runner 使用：
+    #
+    #     case.role
+    #
+    # 为每条 Case
+    # 创建自己的 AccessContext。
     # ======================================================
 
     results = []
@@ -489,9 +633,6 @@ def main() -> None:
 
     # ======================================================
     # 7. 建立 Method → Result Mapping。
-    #
-    # 后面的 Failure Analysis
-    # 不依赖 list index。
     # ======================================================
 
     results_by_method = {
@@ -502,6 +643,12 @@ def main() -> None:
     dense_result = (
         results_by_method[
             RetrievalMethod.DENSE
+        ]
+    )
+
+    bm25_result = (
+        results_by_method[
+            RetrievalMethod.BM25
         ]
     )
 
@@ -518,7 +665,7 @@ def main() -> None:
     )
 
     # ======================================================
-    # 8. Failure Analysis：
+    # 8. Pairwise Failure Analysis：
     #
     # Dense
     # ↓
@@ -551,8 +698,8 @@ def main() -> None:
     # ↓
     # Reranker
     #
-    # 找出 Cross-Encoder 重新提升
-    # 第一个 Gold 排名的 Query。
+    # 找出 Reranker
+    # 把第一个 Gold 向前提升的 Query。
     # ======================================================
 
     hybrid_to_rerank_improvements = (
@@ -573,15 +720,134 @@ def main() -> None:
     )
 
     # ======================================================
-    # 10. 当前实验边界提示。
+    # 10. General Failure Inspector。
+    #
+    # Pairwise comparison 只能告诉我们：
+    #
+    #     A → B
+    #
+    # 是变好还是变坏。
+    #
+    # 这里进一步检查：
+    #
+    #     单个 Method 自己
+    #     到底在哪些 Query 上失败。
+    # ======================================================
+
+    # ------------------------------------------------------
+    # Dense：
+    #
+    # 第一个 Gold 没有排 Rank1 的 Case。
+    # ------------------------------------------------------
+
+    dense_non_top1_cases = (
+        find_non_top1_gold_cases(
+            result=dense_result,
+            metric_k=10,
+        )
+    )
+
+    print_method_failure_cases(
+        title=(
+            "Dense Non-Top1 Gold Cases"
+        ),
+        result=dense_result,
+        cases=dense_non_top1_cases,
+        metric_k=10,
+        top_n=5,
+    )
+
+    # ------------------------------------------------------
+    # BM25：
+    #
+    # Top10 中完全没有任何 Gold。
+    #
+    # 这是我们分析中英混合 Corpus
+    # lexical mismatch 的关键诊断。
+    # ------------------------------------------------------
+
+    bm25_gold_misses = (
+        find_gold_miss_cases(
+            result=bm25_result,
+            metric_k=10,
+        )
+    )
+
+    print_method_failure_cases(
+        title=(
+            "BM25 Gold Misses @10"
+        ),
+        result=bm25_result,
+        cases=bm25_gold_misses,
+        metric_k=10,
+        top_n=5,
+    )
+
+    # ------------------------------------------------------
+    # Hybrid RRF：
+    #
+    # 检查第一个 Gold
+    # 没有排 Rank1 的 Case。
+    # ------------------------------------------------------
+
+    hybrid_non_top1_cases = (
+        find_non_top1_gold_cases(
+            result=hybrid_result,
+            metric_k=10,
+        )
+    )
+
+    print_method_failure_cases(
+        title=(
+            "Hybrid RRF Non-Top1 Gold Cases"
+        ),
+        result=hybrid_result,
+        cases=hybrid_non_top1_cases,
+        metric_k=10,
+        top_n=5,
+    )
+
+    # ------------------------------------------------------
+    # Hybrid + Rerank：
+    #
+    # 这是当前最值得看的最终诊断：
+    #
+    # Reranker 已经修复了一批 RRF failure，
+    # 但 Aggregate Metrics 显示它仍没有
+    # 完全达到 Dense 的水平。
+    #
+    # 所以这里直接列出剩余 Case。
+    # ------------------------------------------------------
+
+    rerank_non_top1_cases = (
+        find_non_top1_gold_cases(
+            result=rerank_result,
+            metric_k=10,
+        )
+    )
+
+    print_method_failure_cases(
+        title=(
+            "Hybrid + Rerank "
+            "Non-Top1 Gold Cases"
+        ),
+        result=rerank_result,
+        cases=rerank_non_top1_cases,
+        metric_k=10,
+        top_n=5,
+    )
+
+    # ======================================================
+    # 11. 当前实验边界提示。
     # ======================================================
 
     print()
     print("=" * 100)
 
     print(
-        "⚠ 当前为 Seed Dataset 上的 "
-        "Preliminary Retrieval Ablation。"
+        "⚠ 当前 Retrieval Quality "
+        "结果基于 Dataset：",
+        dataset_version,
     )
 
     print(
@@ -590,15 +856,21 @@ def main() -> None:
     )
 
     print(
-        "⚠ 当前 latency 仍为单次 Query "
-        "mean latency，"
-        "尚未进行 warmup / repeated runs / "
-        "p50 / p95 正式统计。"
+        "⚠ Summary 表中的 Mean Latency(ms) "
+        "仅作为本次 Ablation Run 的附带诊断信息。"
     )
 
     print(
-        "⚠ 当前结果不用于调 RRF 参数；"
-        "先进行 Failure Case 分析，"
+        "⚠ 项目正式 Retrieval Latency 结论 "
+        "使用 Query-level Interleaved Benchmark："
+        "对每个 Query 随机化四种 Method 的执行顺序，"
+        "以控制 GPU Warm-State 和 Method Order Bias，"
+        "并使用 repeated runs / P50 / P95 进行统计。"
+    )
+
+    print(
+        "⚠ 当前 Retrieval Quality 结果 "
+        "不用于根据测试结果反向修改 Gold，"
         "避免 Evaluation Leakage。"
     )
 
