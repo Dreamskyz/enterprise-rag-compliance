@@ -49,12 +49,15 @@ SYSTEM_PROMPT = """
    answerable 必须为 false；
    answer 必须为 null；
    citations 必须为空数组；
-   reason 应简洁说明缺少什么依据。
+   reason 必须是非空字符串，
+   并简洁说明缺少什么依据。
 
 8. 如果 Evidence 足够：
    answerable 必须为 true；
    answer 必须直接回答问题；
-   citations 必须至少包含一个真实 Evidence ID。
+   citations 必须至少包含一个真实 Evidence ID；
+   reason 必须是非空字符串，
+   并简洁说明哪些 Evidence 足以支持答案。
 
 9. Citation 必须遵守“最小充分证据集”原则：
 
@@ -74,6 +77,18 @@ SYSTEM_PROMPT = """
 
 10. Evidence ID 只能出现在 citations 数组中。
     不要在 answer 正文中输出 E1、E2、E3 等内部 Evidence ID。
+
+11. 输出 JSON 中以下四个字段必须全部存在：
+
+    answerable
+    answer
+    reason
+    citations
+
+    不得省略任何字段。
+
+12. reason 在任何情况下都必须是非空字符串。
+    不得返回 null、空字符串 "" 或仅包含空白字符。
 
 你只能输出一个 JSON 对象。
 
@@ -101,6 +116,53 @@ JSON 格式必须为：
 """.strip()
 
 
+# ==========================================================
+# Structured Output Retry Prompt。
+#
+# 这里只处理“输出协议不合法”。
+#
+# 不允许模型因为 Retry：
+#
+# - 改变 Evidence；
+# - 获取新的事实；
+# - 被要求强制回答；
+# - 绕过原来的 Evidence Sufficiency 判断。
+#
+# Retry 的唯一任务：
+#
+#     基于完全相同的 Question + Evidence，
+#     重新输出满足 JSON Contract 的结果。
+# ==========================================================
+
+STRUCTURED_OUTPUT_RETRY_PROMPT = """
+你上一轮输出没有通过程序的结构化输出校验。
+
+请重新基于完全相同的 Question 和 Evidence 作答。
+
+不要因为本次重试而改变 Evidence Sufficiency 判断标准。
+如果 Evidence 不足，仍然必须拒答。
+如果 Evidence 足够，才能回答。
+
+必须严格满足以下输出契约：
+
+1. 只能输出一个 JSON 对象。
+2. 必须包含全部四个字段：
+   answerable、answer、reason、citations。
+3. answerable 必须是 bool。
+4. reason 在任何情况下都必须是非空字符串。
+5. answerable=true 时：
+   - answer 必须是非空字符串；
+   - citations 必须至少包含一个真实 Evidence ID。
+6. answerable=false 时：
+   - answer 必须为 null；
+   - citations 必须为空数组。
+7. citations 只能包含原始 Evidence 中存在的 Evidence ID。
+8. 不得输出 Markdown、代码块或 JSON 之外的文字。
+
+请重新输出完整 JSON。
+""".strip()
+
+
 def build_evidence_items(
     results: Sequence[
         RerankedSearchResult
@@ -115,14 +177,16 @@ def build_evidence_items(
     而不是 retrieval_text。
 
     原因：
-        retrieval_text 是为检索优化的表示；
 
-        Generation 更适合看到：
-            标题
-            条款
-            正文
+    retrieval_text 是为检索优化的表示；
 
-        避免不必要的重复文本。
+    Generation 更适合看到：
+
+        标题
+        条款
+        正文
+
+    避免不必要的重复文本。
     """
 
     if max_evidence <= 0:
@@ -165,7 +229,7 @@ def build_generation_messages(
     ],
 ) -> list[dict[str, str]]:
     """
-    构造发送给 LLM 的 Messages。
+    构造第一次发送给 LLM 的 Messages。
     """
 
     if not query.strip():
@@ -213,3 +277,72 @@ def build_generation_messages(
             "content": user_prompt,
         },
     ]
+
+
+def build_generation_retry_messages(
+    original_messages: Sequence[
+        dict[str, str]
+    ],
+    invalid_response: str,
+    validation_error: str,
+) -> list[dict[str, str]]:
+    """
+    构造一次 Structured Output Retry Messages。
+
+    为什么保留原始 Messages？
+
+    因为第二次生成必须继续看到完全相同的：
+
+        Question
+        Evidence
+        System Rules
+
+    不能只把错误 JSON 单独交给模型，
+    否则模型可能失去原始证据上下文。
+
+    invalid_response:
+        第一轮 LLM 的原始输出。
+
+    validation_error:
+        严格 Parser 返回的失败原因。
+
+    这两个字段仅帮助模型理解：
+        “结构哪里不合法”。
+
+    它们不会改变事实依据。
+    """
+
+    if not original_messages:
+        raise ValueError(
+            "original_messages 不能为空"
+        )
+
+    if not validation_error.strip():
+        raise ValueError(
+            "validation_error 不能为空"
+        )
+
+    retry_messages = [
+        dict(message)
+        for message in original_messages
+    ]
+
+    retry_messages.append(
+        {
+            "role": "assistant",
+            "content": invalid_response,
+        }
+    )
+
+    retry_messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"{STRUCTURED_OUTPUT_RETRY_PROMPT}\n\n"
+                "程序校验失败原因：\n"
+                f"{validation_error}"
+            ),
+        }
+    )
+
+    return retry_messages

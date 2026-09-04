@@ -20,8 +20,10 @@ class RetrieveRequest(BaseModel):
     role:
         当前请求使用的访问角色。
 
-        V1 暂时由请求显式传入，
-        后续生产环境应由认证系统
+        当前为了 ACL Demo
+        由请求显式传入。
+
+        生产环境应由认证系统
         从 JWT / SSO Claims 中解析。
 
     top_k:
@@ -55,8 +57,26 @@ class RetrieveResultItem(BaseModel):
     """
     一条最终 Retrieval Result。
 
-    当前 API 暴露的是最终 Reranked Result，
-    不直接暴露底层 SDK / Dataclass。
+    当前 API 暴露的是：
+
+        Final Reranked Result
+
+    不直接暴露底层：
+
+        Qdrant SDK Object
+        Retriever Dataclass
+
+    article_number:
+
+        Regulation Chunk
+            → 可能存在，例如“第十四条”。
+
+        OWASP / FastAPI / Qdrant
+            → 没有法规 Article Number，
+              因此允许为 None。
+
+    这与统一 KnowledgeChunk
+    的 Domain Schema 保持一致。
     """
 
     rank: int
@@ -65,7 +85,12 @@ class RetrieveResultItem(BaseModel):
 
     title: str
 
-    article_number: str
+    # ------------------------------------------------------
+    # 技术文档没有法规条文编号，
+    # 因此这里不能强制要求 str。
+    # ------------------------------------------------------
+
+    article_number: str | None
 
     content: str
 

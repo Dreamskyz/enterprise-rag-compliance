@@ -20,12 +20,15 @@ class AskRequest(BaseModel):
     role:
         当前请求使用的演示角色。
 
-        V1 为了 ACL Demo 由请求显式传入。
+        当前为了 ACL Demo
+        由请求显式传入。
 
         生产环境中应从可信认证系统：
+
             JWT
             SSO
             Session Claims
+
         中解析。
     """
 
@@ -47,8 +50,30 @@ class CitationResponse(BaseModel):
     """
     API 返回的一条确定性 Citation。
 
-    这些字段来自程序内部 Evidence Mapping，
-    不是直接相信 LLM 输出。
+    Citation Metadata 来自程序内部：
+
+        Evidence ID
+        ↓
+        Evidence Mapping
+        ↓
+        KnowledgeChunk
+
+    而不是直接相信 LLM 输出。
+
+    article_number:
+
+        法规 Chunk：
+            例如“第十一条”。
+
+        OWASP / FastAPI / Qdrant
+        等通用技术文档：
+            没有法规条文编号，
+            因此允许为 None。
+
+    这里必须保留 Domain Model
+    中的真实可空语义，
+    不能为了 API 输出方便
+    强制转换成空字符串。
     """
 
     evidence_id: str
@@ -57,7 +82,14 @@ class CitationResponse(BaseModel):
 
     title: str
 
-    article_number: str
+    # ------------------------------------------------------
+    # 法规存在 Article Number，
+    # 技术文档不存在。
+    #
+    # 因此必须允许 None。
+    # ------------------------------------------------------
+
+    article_number: str | None
 
     source_url: str
 
@@ -71,13 +103,13 @@ class AskResponse(BaseModel):
 
     answer:
         可回答时为最终回答；
-        拒答时为 null。
+        拒答时为 None。
 
     reason:
         回答 / 拒答原因。
 
     citations:
-        确定性引用。
+        经过程序确定性映射和验证后的 Citation。
 
     retrieval_count:
         Reranker 最终参与 QueryService 的
@@ -87,11 +119,11 @@ class AskResponse(BaseModel):
         Top1 Cross-Encoder relevance score。
 
         注意：
-        这是可观测信号，
+        这是可观测 relevance signal，
         不是 answerability probability。
 
     gate_reason:
-        Coarse Relevance Gate 结果。
+        Coarse Evidence Gate 结果。
     """
 
     query: str

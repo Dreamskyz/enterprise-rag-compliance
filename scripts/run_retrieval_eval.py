@@ -49,21 +49,49 @@ from enterprise_rag.retrieval.reranked import (
 
 
 # ==========================================================
-# Evaluation Dataset。
+# Evaluation Dataset Registry。
 #
 # V1:
 #     冻结的历史 Regression Benchmark。
 #
-# V2:
-#     当前 Corpus V2 Capability Benchmark。
+#     主要作用：
+#         检查后续 Corpus / Retrieval 演化
+#         是否破坏最早期核心能力。
 #
-# 不通过修改代码切换 Dataset，
-# 而是通过：
+# V2:
+#     Corpus V2 Capability Benchmark。
+#
+#     在 V1 基础上增加：
+#         OWASP
+#         FastAPI
+#         Hard Negative
+#         Role-aware technical cases
+#
+# V3:
+#     Final Corpus Capability Benchmark。
+#
+#     当前对应最终冻结的：
+#
+#         28 documents
+#         835 KnowledgeChunks
+#
+#     在 V2 基础上继续增加：
+#         新增中国法规能力
+#         Qdrant 技术规范
+#         ACL same-query pair
+#         Evidence Sufficiency hard negative
+#
+# 三个 Dataset 都保留，
+# 不互相覆盖。
+#
+# 显式使用：
 #
 #     --dataset v1
 #     --dataset v2
+#     --dataset v3
 #
-# 显式选择。
+# 默认仍然保持 v1，
+# 避免 CLI 演化偷偷改变旧命令语义。
 # ==========================================================
 
 EVAL_PATHS: dict[
@@ -76,11 +104,14 @@ EVAL_PATHS: dict[
     "v2": Path(
         "data/eval/retrieval_eval_v2.jsonl"
     ),
+    "v3": Path(
+        "data/eval/retrieval_eval_v3.jsonl"
+    ),
 }
 
 
 # ==========================================================
-# 当前真实 KnowledgeChunk 数据。
+# 当前真实 KnowledgeChunk Corpus。
 # ==========================================================
 
 CHUNKS_PATH = Path(
@@ -134,16 +165,20 @@ def parse_args() -> argparse.Namespace:
     原因：
 
     在加入 --dataset 参数之前，
-    当前脚本历史上一直运行的就是：
+    当前脚本历史上一直运行的是：
 
         retrieval_eval_v1.jsonl
 
     CLI 演化不应该偷偷改变
     旧命令的实验语义。
 
-    Corpus V2 正式评测时显式执行：
+    当前可以显式运行：
+
+        python scripts/run_retrieval_eval.py --dataset v1
 
         python scripts/run_retrieval_eval.py --dataset v2
+
+        python scripts/run_retrieval_eval.py --dataset v3
     """
 
     parser = argparse.ArgumentParser(
@@ -162,7 +197,8 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Evaluation dataset version. "
             "v1=frozen regression benchmark, "
-            "v2=current Corpus V2 benchmark. "
+            "v2=Corpus V2 capability benchmark, "
+            "v3=final 835-chunk capability benchmark. "
             "Default: v1."
         ),
     )
@@ -184,9 +220,28 @@ def main() -> None:
 
         answerable = true
 
-    Unanswerable Query 后续进入：
+    原因：
 
-        Refusal Evaluation
+    Recall / MRR 的计算前提是：
+
+        Query 存在 Retrieval Gold。
+
+    对：
+
+        answerable = false
+
+    的 Case，
+
+    Dataset 中：
+
+        gold_chunk_ids = []
+
+    它们不会进入 Retrieval Quality 指标，
+    而是在后续：
+
+        Full-RAG Answer / Refusal Evaluation
+
+    中评估系统是否正确拒答。
 
     ------------------------------------------------------
     Role-aware Evaluation
@@ -204,10 +259,12 @@ def main() -> None:
     为每条 Query
     构造自己的 AccessContext。
 
-    因此 V2 可以在一次评测中同时包含：
+    因此同一个 Dataset
+    可以同时包含：
 
         guest
         developer
+        admin
 
     而不会绕过生产 ACL。
     """
@@ -352,6 +409,10 @@ def main() -> None:
     # BM25 Top20
     # ↓
     # RRF(k=60)
+    #
+    # 注意：
+    # Final Eval 阶段冻结这些参数，
+    # 不根据 V3 结果反向调整。
     # ------------------------------------------------------
 
     hybrid_retriever = HybridRetriever(
@@ -632,7 +693,7 @@ def main() -> None:
     )
 
     # ======================================================
-    # 7. 建立 Method → Result Mapping。
+    # 7. 建立 Method -> Result Mapping。
     # ======================================================
 
     results_by_method = {
@@ -724,7 +785,7 @@ def main() -> None:
     #
     # Pairwise comparison 只能告诉我们：
     #
-    #     A → B
+    #     A -> B
     #
     # 是变好还是变坏。
     #
@@ -762,7 +823,7 @@ def main() -> None:
     #
     # Top10 中完全没有任何 Gold。
     #
-    # 这是我们分析中英混合 Corpus
+    # 这是分析中英混合 Corpus
     # lexical mismatch 的关键诊断。
     # ------------------------------------------------------
 
@@ -810,13 +871,12 @@ def main() -> None:
     # ------------------------------------------------------
     # Hybrid + Rerank：
     #
-    # 这是当前最值得看的最终诊断：
+    # 检查最终 Rerank 后
+    # 第一个 Gold 仍然没有排 Rank1 的 Case。
     #
-    # Reranker 已经修复了一批 RRF failure，
-    # 但 Aggregate Metrics 显示它仍没有
-    # 完全达到 Dense 的水平。
-    #
-    # 所以这里直接列出剩余 Case。
+    # Aggregate Metrics 很重要，
+    # 但不能掩盖具体 Query 上
+    # 仍然存在的细粒度排序问题。
     # ------------------------------------------------------
 
     rerank_non_top1_cases = (
@@ -856,6 +916,18 @@ def main() -> None:
     )
 
     print(
+        "⚠ 当前 Unanswerable Case 数量：",
+        unanswerable_count,
+    )
+
+    print(
+        "⚠ Retrieval Recall / MRR "
+        "只统计 answerable=true 的 Case；"
+        "Unanswerable Case 留给 "
+        "Full-RAG Answer / Refusal Evaluation。"
+    )
+
+    print(
         "⚠ Summary 表中的 Mean Latency(ms) "
         "仅作为本次 Ablation Run 的附带诊断信息。"
     )
@@ -873,6 +945,14 @@ def main() -> None:
         "不用于根据测试结果反向修改 Gold，"
         "避免 Evaluation Leakage。"
     )
+
+    if dataset_version == "v3":
+        print(
+            "⚠ V3 是 Final Capability Benchmark；"
+            "当前阶段冻结 Corpus、Gold、"
+            "Retriever、RRF 和 Reranker 参数，"
+            "不根据 V3 结果进行调参。"
+        )
 
 
 if __name__ == "__main__":

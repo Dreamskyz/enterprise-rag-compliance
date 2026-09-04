@@ -1,12 +1,29 @@
-#setuptools工具进行构建和安装
-#setuptools 是 Python 的构建/打包工具
-#pip 负责安装，setuptools 负责告诉 pip 项目怎么构建
-#[build-system] 描述构建项目需要什么；[project].dependencies 描述运行项目需要什么
+# setuptools 工具进行构建和安装。
+#
+# pip 负责安装，
+# setuptools 负责告诉 pip：
+#
+#   项目如何构建
+#   Python Package 在哪里
+#
+# [build-system]
+#     描述构建项目需要什么。
+#
+# [project].dependencies
+#     描述项目核心运行时需要什么。
+#
+# [project.optional-dependencies]
+#     描述开发 / Demo 等可选依赖。
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-#定义项目本身
+
+# ==========================================================
+# 项目元信息
+# ==========================================================
+
 [project]
 name = "enterprise-rag-compliance"
 version = "0.1.0"
@@ -14,7 +31,24 @@ description = "企业 AI 合规与应用规范 RAG 助手"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 
-#依赖
+
+# ==========================================================
+# 核心运行依赖
+#
+# 这些依赖用于：
+#
+#   Ingestion
+#   Embedding
+#   Retrieval
+#   Rerank
+#   Qdrant
+#   LLM
+#   FastAPI Backend
+#
+# Streamlit 不属于后端核心依赖，
+# 因此不会放在这里。
+# ==========================================================
+
 dependencies = [
     "httpx>=0.27,<1.0",
     "beautifulsoup4>=4.12,<5.0",
@@ -29,11 +63,42 @@ dependencies = [
     "uvicorn[standard]",
 ]
 
+
+# ==========================================================
+# 可选依赖
+# ==========================================================
+
 [project.optional-dependencies]
+
+# 开发 / 测试依赖。
 dev = [
     "pytest>=8.0,<9.0",
 ]
 
-#表示让 setuptools 去 src/ 下寻找我们的 Python 包
+# Streamlit Demo 依赖。
+#
+# requests：
+#     demo/api_client.py 使用它通过 HTTP 调用 FastAPI。
+#
+# streamlit：
+#     只负责 Demo UI，
+#     不直接初始化 RAG Runtime。
+demo = [
+    "requests>=2.31,<3.0",
+    "streamlit>=1.37,<2.0",
+]
+
+
+# ==========================================================
+# setuptools Package Discovery
+#
+# 项目使用 src-layout：
+#
+#   src/
+#       enterprise_rag/
+#
+# 因此告诉 setuptools 从 src/ 查找 Python Package。
+# ==========================================================
+
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -7,6 +7,43 @@ from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
 
 
+# ============================================================
+# Qdrant V1 保留的代码示例语言
+# ============================================================
+#
+# Qdrant 官方文档经常针对同一个知识点同时提供：
+#
+# JSON
+# HTTP
+# Python
+# TypeScript
+# Rust
+# Java
+# C#
+# Go
+#
+# 对于当前这个 Python RAG 项目，
+# 如果全部保留，会导致：
+#
+# 1. Corpus 明显膨胀；
+# 2. 同一个语义出现大量重复 Chunk；
+# 3. Retrieval 中产生无意义的候选竞争。
+#
+# 因此 V1 有意只保留：
+#
+# JSON   -> 数据结构
+# HTTP   -> Qdrant 原始 API 语义
+# Python -> 当前项目真实使用的客户端语言
+#
+# 没有标记语言的代码块暂时也保留，
+# 避免误删普通文本型示例。
+QDRANT_RETAINED_CODE_LANGUAGES = {
+    "json",
+    "http",
+    "python",
+}
+
+
 def load_html(path: Path) -> str:
     """
     读取完整 HTML 页面中的可见文本。
@@ -159,6 +196,96 @@ def _clean_heading_text(
     )
 
     return cleaned.strip()
+
+
+def _extract_owasp_pseudo_heading(
+    text: str,
+) -> str | None:
+    """
+    识别 OWASP 页面中的特殊伪 Heading。
+
+    当前部分 OWASP GenAI 页面源码中存在：
+
+        <p>###@ Sanitization:</p>
+        <p>###@ Access Controls:</p>
+
+    也就是说：
+
+        页面原始 Markdown 中本应具有标题语义的内容，
+
+    在最终 HTML 中并没有被渲染成：
+
+        <h3>...</h3>
+
+    而是错误地保留成了普通：
+
+        <p>...</p>
+
+    如果直接按照普通 Paragraph 处理，
+    Generic Section Parser 最终会把：
+
+        ###@ Sanitization:
+
+    当成正文，
+    从而丢失原始 Section 层级。
+
+    因此这里只针对 OWASP 这一类
+    source-specific anomaly 做兼容。
+
+    支持格式：
+
+        #@ Title
+        ##@ Title
+        ###@ Title
+        ...
+        ######@ Title
+
+    返回：
+
+        合法 Markdown-like Heading，
+        例如：
+
+            ### Sanitization:
+
+    如果不是该模式，则返回 None。
+
+    注意：
+
+    这里不做：
+
+        text.replace("###@", "### ")
+
+    这种全局字符串替换。
+
+    只有当整个 Paragraph 本身符合
+    pseudo-heading 模式时，
+    才把它恢复为 Heading，
+    避免误伤普通正文。
+    """
+
+    cleaned = text.strip()
+
+    match = re.fullmatch(
+        r"(#{1,6})@\s*(.+)",
+        cleaned,
+    )
+
+    if match is None:
+        return None
+
+    hashes = match.group(1)
+
+    heading_text = _clean_heading_text(
+        match.group(2)
+    )
+
+    if not heading_text:
+        return None
+
+    return (
+        f"{hashes} "
+        f"{heading_text}"
+    )
 
 
 def _extract_list_item_text(
@@ -331,6 +458,9 @@ def _extract_code_block_text(
 
 def _html_content_to_markdown_like(
     content: Tag,
+    *,
+    recognize_owasp_pseudo_headings: bool = False,
+    include_asides: bool = False,
 ) -> str:
     """
     将已经定位好的 HTML 正文容器
@@ -353,12 +483,50 @@ def _html_content_to_markdown_like(
         li  -> 列表正文
         pre -> 技术代码块
 
+    当：
+
+        include_asides=True
+
+    时，还会把：
+
+        <aside>...</aside>
+
+    作为知识正文保留下来。
+
+    这主要用于 Qdrant 官方技术文档，
+    因为它会把：
+
+        性能建议；
+        索引建议；
+        API 使用注意事项；
+
+    放入 aside 中。
+
+    如果直接忽略 aside，
+    会静默丢失具有实际技术价值的知识。
+
+    当：
+
+        recognize_owasp_pseudo_headings=True
+
+    时，还会识别 OWASP 页面中的：
+
+        <p>###@ Sanitization:</p>
+
+    并恢复成：
+
+        ### Sanitization:
+
+    这种合法 Markdown-like Heading。
+
+    默认两个兼容选项都关闭，
+    避免某一个数据源的特殊规则
+    意外改变其他数据源的历史 ingestion 行为。
+
     这样下游既能够恢复 Section 层级，
     又能够保留技术文档中的代码示例。
 
-    这里还有一个重要设计：
-
-        不同语义 block 之间使用一个空行分隔。
+    不同语义 block 之间使用一个空行分隔。
 
     例如：
 
@@ -376,27 +544,36 @@ def _html_content_to_markdown_like(
 
     blocks: list[str] = []
 
+    # --------------------------------------------------
+    # 根据调用方能力决定需要遍历哪些 HTML 元素。
+    #
+    # aside 并不是所有数据源都需要，
+    # 所以默认不加入。
+    # --------------------------------------------------
+    element_names = [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "li",
+        "pre",
+    ]
+
+    if include_asides:
+        element_names.append(
+            "aside"
+        )
+
     # 按 DOM 中真实出现的顺序
     # 遍历知识相关元素。
     #
     # 不直接遍历 div / span，
     # 因为它们主要属于网页布局结构。
-    #
-    # FastAPI 等技术文档中的 <pre>
-    # 保存代码示例，因此现在也属于
-    # retrieval-relevant 内容。
     for element in content.find_all(
-        [
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "h5",
-            "h6",
-            "p",
-            "li",
-            "pre",
-        ]
+        element_names
     ):
 
         # --------------------------------------------------
@@ -449,11 +626,24 @@ def _html_content_to_markdown_like(
             ):
                 continue
 
-            # 如果未来某个 HTML 页面把 p 放进 pre，
+            # 如果 p 位于 pre 内部，
             # 代码块会由 <pre> 独立处理，
             # 同样避免重复。
             if (
                 element.find_parent("pre")
+                is not None
+            ):
+                continue
+
+            # 当 include_asides=True 时，
+            # aside 会作为一个整体语义块处理。
+            #
+            # 如果某些页面的 aside 内部又嵌套了 p，
+            # 这里必须跳过内部 p，
+            # 否则同一段文字会出现两次。
+            if (
+                include_asides
+                and element.find_parent("aside")
                 is not None
             ):
                 continue
@@ -463,10 +653,38 @@ def _html_content_to_markdown_like(
                 strip=True,
             )
 
-            if paragraph:
-                blocks.append(
-                    paragraph
+            if not paragraph:
+                continue
+
+            # --------------------------------------------------
+            # OWASP 特殊兼容：
+            #
+            # 某些 OWASP 页面源码存在：
+            #
+            # <p>###@ Sanitization:</p>
+            #
+            # 这种 paragraph 实际承担 Heading 语义。
+            #
+            # 只有 OWASP 调用方显式开启该功能时，
+            # 才进行识别。
+            # --------------------------------------------------
+            if recognize_owasp_pseudo_headings:
+                pseudo_heading = (
+                    _extract_owasp_pseudo_heading(
+                        paragraph
+                    )
                 )
+
+                if pseudo_heading is not None:
+                    blocks.append(
+                        pseudo_heading
+                    )
+
+                    continue
+
+            blocks.append(
+                paragraph
+            )
 
             continue
 
@@ -474,6 +692,17 @@ def _html_content_to_markdown_like(
         # 3. List Item
         # --------------------------------------------------
         if element.name == "li":
+
+            # 如果某个 aside 内部包含列表，
+            # 当整个 aside 已经被保留时，
+            # 不再重复提取内部 li。
+            if (
+                include_asides
+                and element.find_parent("aside")
+                is not None
+            ):
+                continue
+
             list_text = (
                 _extract_list_item_text(
                     element
@@ -500,6 +729,17 @@ def _html_content_to_markdown_like(
         # 4. Code Block
         # --------------------------------------------------
         if element.name == "pre":
+
+            # 如果未来 aside 中存在 pre，
+            # 整个 aside 已经被作为一个语义块保留，
+            # 因此不重复注入代码。
+            if (
+                include_asides
+                and element.find_parent("aside")
+                is not None
+            ):
+                continue
+
             code_text = (
                 _extract_code_block_text(
                     element
@@ -511,15 +751,42 @@ def _html_content_to_markdown_like(
                     code_text
                 )
 
-    # 注意这里不是：
-    #
-    #     "\n".join(blocks)
-    #
-    # 而是：
-    #
-    #     "\n\n".join(blocks)
-    #
-    # 目的是在不同 HTML 语义块之间
+            continue
+
+        # --------------------------------------------------
+        # 5. Aside
+        # --------------------------------------------------
+        if element.name == "aside":
+
+            # Qdrant 会使用 aside 保存一些
+            # 具有实际知识价值的 Note / Tip。
+            #
+            # 例如：
+            #
+            # For performant filtering,
+            # create payload indexes...
+            #
+            # 这些内容不是网页 UI，
+            # 因此必须进入知识库。
+            aside_text = element.get_text(
+                " ",
+                strip=True,
+            )
+
+            if aside_text:
+                # 添加一个轻量 [NOTE] 标记，
+                # 让 Chunk 中仍然能够看出
+                # 这是官方文档中特别强调的说明。
+                #
+                # 它不会干扰 Generic Section Parser，
+                # 因为它不是 Markdown Heading。
+                blocks.append(
+                    f"[NOTE] {aside_text}"
+                )
+
+            continue
+
+    # 不同 HTML 语义块之间
     # 显式保留自然段边界。
     return "\n\n".join(
         blocks
@@ -550,6 +817,18 @@ def extract_owasp_article(
 
     否则 Heading 层级会丢失。
 
+    另外，部分 OWASP 页面源码存在：
+
+        <p>###@ Sanitization:</p>
+
+    这类没有被 HTML 正确渲染成 Heading 的
+    Markdown-like 残留。
+
+    当前 Extractor 会在 OWASP 链路中
+    将其恢复为合法 Heading：
+
+        ### Sanitization:
+
     本函数最终返回 Markdown-like 文本，例如：
 
         ## LLM01:2025 Prompt Injection
@@ -576,14 +855,6 @@ def extract_owasp_article(
     )
 
     # OWASP 当前文章正文的语义容器。
-    #
-    # 不直接使用 <main id="main">，
-    # 因为 main 中还包含：
-    #
-    # - 页面标题；
-    # - 推荐的其他 LLM Top 10 风险；
-    # - 页面布局；
-    # - 其他非正文内容。
     content = soup.select_one(
         ".elementor-widget-xpro-post-content "
         ".xpro-elementor-content"
@@ -605,15 +876,6 @@ def extract_owasp_article(
 
     # WordPress / Jetpack 页面功能区域
     # 不属于知识正文。
-    #
-    # 例如：
-    #
-    # Share this:
-    # Print
-    # Email
-    # X
-    #
-    # 这些都不应该进入向量库。
     for selector in (
         ".sharedaddy",
         ".sd-sharing",
@@ -631,10 +893,6 @@ def extract_owasp_article(
     #
     # OWASP 页面主标题和正文位于两个独立 widget，
     # 因此这里主动补一个 H2 根标题。
-    #
-    # 这样正文最前面的 introduction 就不会成为
-    # Generic Parser 所说的 heading 前 preamble，
-    # 从而避免丢失。
     root_title = _clean_heading_text(
         title
     )
@@ -646,7 +904,8 @@ def extract_owasp_article(
 
     body_text = (
         _html_content_to_markdown_like(
-            content
+            content,
+            recognize_owasp_pseudo_headings=True,
         )
     )
 
@@ -655,11 +914,6 @@ def extract_owasp_article(
             f"OWASP 正文为空：{path}"
         )
 
-    # 根标题和正文之间同样保留一个空行。
-    #
-    # 这样 structured normalizer
-    # 不会丢掉根 Section 中 introduction
-    # 的第一个自然段边界。
     return (
         f"## {root_title}\n\n"
         f"{body_text}"
@@ -699,21 +953,6 @@ def extract_fastapi_article(
 
     因此不需要像 OWASP 一样
     人工补充根标题。
-
-    本函数只负责：
-
-    1. 准确定位正文 DOM；
-    2. 删除正文内部无关功能元素；
-    3. 将 HTML 语义结构转换为
-       Markdown-like 中间表示。
-
-    后续统一交给：
-
-        normalize_structured_text()
-        parse_generic_sections()
-        build_generic_section_chunks()
-
-    处理。
     """
 
     html = path.read_text(
@@ -725,15 +964,7 @@ def extract_fastapi_article(
         "html.parser",
     )
 
-    # FastAPI 当前官方文档使用
-    # Material / Zensical 风格页面结构。
-    #
-    # 真正文章正文位于：
-    #
-    # <article class="md-content__inner md-typeset">
-    #
-    # 不能选择整个 <main class="md-main">，
-    # 因为 main 里面同时还存在左右侧导航栏。
+    # FastAPI 当前官方文档真正正文区域。
     content = soup.select_one(
         "article.md-content__inner.md-typeset"
     )
@@ -751,37 +982,14 @@ def extract_fastapi_article(
     ):
         tag.decompose()
 
-    # FastAPI Heading 内通常存在：
-    #
-    # <a class="headerlink" ...>¶</a>
-    #
-    # 这是用于网页锚点跳转的 UI 元素，
-    # 不属于真正标题内容。
-    #
-    # 如果不删除，
-    # Heading 可能会变成：
-    #
-    # Dependencies ¶
-    #
-    # 因此必须在 Heading 文本提取前删除。
+    # 删除 Heading 锚点中的 ¶。
     for tag in content.select(
         "a.headerlink"
     ):
         tag.decompose()
 
-    # details 通常包含类似：
-    #
-    # "Other versions and variants"
-    #
-    # FastAPI 页面会在里面重复展示
-    # 旧 Python 版本或其他等价写法。
-    #
-    # 当前 V1 的目标不是建立完整 API reference，
-    # 而是构建干净、低重复的技术规范语料。
-    #
-    # 因此先移除这些版本展开区，
-    # 避免同一知识因为多个 Python 写法
-    # 被重复注入多个 Chunk。
+    # 删除 FastAPI 不同 Python 版本
+    # 重复展示的 details 区域。
     for tag in content.find_all(
         "details"
     ):
@@ -796,6 +1004,319 @@ def extract_fastapi_article(
     if not body_text.strip():
         raise ValueError(
             f"FastAPI 正文为空：{path}"
+        )
+
+    return body_text
+
+
+def _get_qdrant_code_language(
+    pre: Tag,
+) -> str | None:
+    """
+    获取 Qdrant <pre> 代码块的语言。
+
+    Qdrant 当前 HTML 大致为：
+
+        <pre class="chroma">
+            <code
+                class="language-python"
+                data-lang="python"
+            >
+                ...
+            </code>
+        </pre>
+
+    因此优先读取：
+
+        data-lang
+
+    如果 data-lang 不存在，
+    再尝试从：
+
+        class="language-python"
+
+    中恢复语言。
+
+    最终如果完全无法识别，
+    返回 None。
+    """
+
+    code = pre.find(
+        "code"
+    )
+
+    if code is None:
+        return None
+
+    # --------------------------------------------------
+    # 1. 优先使用 data-lang。
+    # --------------------------------------------------
+    data_lang = code.get(
+        "data-lang"
+    )
+
+    if isinstance(
+        data_lang,
+        str,
+    ):
+        cleaned = (
+            data_lang
+            .strip()
+            .lower()
+        )
+
+        if cleaned:
+            return cleaned
+
+    # --------------------------------------------------
+    # 2. fallback：
+    #    class="language-python"
+    # --------------------------------------------------
+    classes = code.get(
+        "class",
+        [],
+    )
+
+    for class_name in classes:
+        if not isinstance(
+            class_name,
+            str,
+        ):
+            continue
+
+        if class_name.startswith(
+            "language-"
+        ):
+            language = (
+                class_name[
+                    len("language-"):
+                ]
+                .strip()
+                .lower()
+            )
+
+            if language:
+                return language
+
+    return None
+
+
+def _remove_redundant_qdrant_code_blocks(
+    content: Tag,
+) -> None:
+    """
+    删除 Qdrant 中当前项目不需要的重复 SDK 代码示例。
+
+    Qdrant 官方文档常常对一个相同功能同时展示：
+
+        HTTP
+        Python
+        TypeScript
+        Rust
+        Java
+        C#
+        Go
+
+    如果全部进入 RAG Corpus：
+
+    - 会增加大量高度相似 Chunk；
+    - 会放大技术文档在检索候选中的占比；
+    - 会让同一知识点产生重复竞争；
+    - 还会增加 Embedding / Rerank 成本。
+
+    当前项目技术栈是 Python，
+    因此 V1 只保留：
+
+        JSON
+        HTTP
+        Python
+
+    没有语言标签的代码块暂时保留，
+    防止误删普通示例。
+
+    注意：
+
+    这是 Corpus Curating，
+    不是声称其他语言示例“不正确”。
+
+    我们只是为当前企业 RAG 助手
+    选择最低重复、最相关的技术证据。
+    """
+
+    for pre in list(
+        content.find_all("pre")
+    ):
+        language = (
+            _get_qdrant_code_language(
+                pre
+            )
+        )
+
+        # 无语言标记的代码块保守保留。
+        if language is None:
+            continue
+
+        if (
+            language
+            not in QDRANT_RETAINED_CODE_LANGUAGES
+        ):
+            # Qdrant 代码块通常位于：
+            #
+            # <div class="highlight">
+            #     <pre>...</pre>
+            # </div>
+            #
+            # 如果只删除 pre，
+            # 会留下一个没有意义的空 div。
+            #
+            # 因此如果父元素正好是
+            # highlight wrapper，
+            # 就连 wrapper 一起删除。
+            parent = pre.parent
+
+            if (
+                isinstance(parent, Tag)
+                and parent.name == "div"
+                and "highlight"
+                in parent.get(
+                    "class",
+                    [],
+                )
+            ):
+                parent.decompose()
+            else:
+                pre.decompose()
+
+
+def extract_qdrant_article(
+    path: Path,
+) -> str:
+    """
+    从 Qdrant 官方文档页面中
+    提取结构化技术正文。
+
+    当前 Qdrant 官方文档正文位于：
+
+        <article class="documentation-article">
+
+    页面外部同时还包含：
+
+    - 顶部导航；
+    - 左侧 Documentation Sidebar；
+    - Breadcrumb；
+    - 搜索 UI；
+    - Footer；
+    - 其他页面布局。
+
+    因此不能选择整个：
+
+        <main>
+
+    而必须只选择：
+
+        article.documentation-article
+
+    Qdrant 还有两个与 FastAPI 不同的特点。
+
+    第一：
+
+        部分重要技术提示位于：
+
+            <aside>
+
+        例如 Filtering 文档中，
+        payload index 的性能建议就在 aside 中。
+
+        因此 Qdrant ingestion 必须保留 aside。
+
+    第二：
+
+        同一个 API 示例往往会提供多个 SDK 版本。
+
+        当前 V1 只保留：
+
+            JSON
+            HTTP
+            Python
+
+        来减少高度重复的技术 Chunk。
+
+    最终输出仍然是统一的：
+
+        Markdown-like structured text
+
+    然后继续交给：
+
+        normalize_structured_text()
+        parse_generic_sections()
+        build_generic_section_chunks()
+
+    因此 Qdrant 的加入不会改变
+    Parser / Chunker 的统一架构。
+    """
+
+    html = path.read_text(
+        encoding="utf-8"
+    )
+
+    soup = BeautifulSoup(
+        html,
+        "html.parser",
+    )
+
+    # --------------------------------------------------
+    # 1. 精确定位 Qdrant 正文。
+    # --------------------------------------------------
+    content = soup.select_one(
+        "article.documentation-article"
+    )
+
+    if content is None:
+        raise ValueError(
+            "未找到 Qdrant 正文容器 "
+            "article.documentation-article："
+            f"{path}"
+        )
+
+    # --------------------------------------------------
+    # 2. 删除绝对不属于知识正文的脚本/样式。
+    # --------------------------------------------------
+    for tag in content(
+        ["script", "style"]
+    ):
+        tag.decompose()
+
+    # --------------------------------------------------
+    # 3. 去掉高度重复的多语言 SDK 示例。
+    #
+    # 必须在 HTML -> Markdown-like 转换之前做。
+    #
+    # 因为一旦转换成普通文本，
+    # 就很难再稳定知道某个 Code Block
+    # 原本到底属于 Python、Rust 还是 Java。
+    # --------------------------------------------------
+    _remove_redundant_qdrant_code_blocks(
+        content
+    )
+
+    # --------------------------------------------------
+    # 4. 转换成统一的 Structured Text。
+    #
+    # 与 FastAPI 的主要区别：
+    #
+    # Qdrant 显式开启 include_asides=True，
+    # 保留官方技术提示。
+    # --------------------------------------------------
+    body_text = (
+        _html_content_to_markdown_like(
+            content,
+            include_asides=True,
+        )
+    )
+
+    if not body_text.strip():
+        raise ValueError(
+            f"Qdrant 正文为空：{path}"
         )
 
     return body_text

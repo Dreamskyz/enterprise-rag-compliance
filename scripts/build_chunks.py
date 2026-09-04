@@ -21,7 +21,9 @@ from enterprise_rag.ingestion.manifest import (
     DocumentManifest,
     load_manifest,
 )
-from enterprise_rag.ingestion.models import KnowledgeChunk
+from enterprise_rag.ingestion.models import (
+    KnowledgeChunk,
+)
 from enterprise_rag.ingestion.regulation_parser import (
     parse_regulation,
 )
@@ -52,6 +54,7 @@ from enterprise_rag.ingestion.validator import (
 #
 # 这里显式声明这个集合，
 # 可以避免为每个 Section 型文档复制一套相同路由。
+
 GENERIC_SECTION_DOCUMENT_TYPES = {
     "security_guideline",
     "technical_documentation",
@@ -68,22 +71,19 @@ def build_chunks_for_document(
     当前支持：
 
     1. regulation
-
        -> CAC HTML Loader
        -> NormalizedDocument
        -> Regulation Parser
        -> Regulation Chunker
 
     2. security_guideline
-
        -> OWASP HTML Loader
        -> NormalizedDocument
        -> Generic Section Parser
        -> Generic Section Chunker
 
     3. technical_documentation
-
-       -> FastAPI HTML Loader
+       -> FastAPI / Qdrant HTML Loader
        -> NormalizedDocument
        -> Generic Section Parser
        -> Generic Section Chunker
@@ -114,12 +114,17 @@ def build_chunks_for_document(
     # - CAC 有自己的正文 DOM；
     # - OWASP 有自己的正文 DOM；
     # - FastAPI 有自己的正文 DOM；
+    # - Qdrant 有自己的正文 DOM；
     #
-    # 这些异构差异已经由
-    # document_builder + loader 解决。
+    # 这些异构差异已经由：
+    #
+    # document_builder + loader
+    #
+    # 解决。
     #
     # 从这里开始，
     # Parser / Chunker 只面对统一的数据对象。
+
     document = build_normalized_document(
         manifest
     )
@@ -127,29 +132,45 @@ def build_chunks_for_document(
     # --------------------------------------------------
     # 1. 法规文档
     # --------------------------------------------------
+
     if (
         manifest.document_type
         == "regulation"
     ):
-        # 法规的核心结构是：
+        # 法规的核心内部结构是：
         #
         # Chapter
         #     ↓
         # Article
         #
-        # 例如：
+        # 对存在显式章节的法规，例如：
         #
         # 第一章 总则
         # 第一条 ...
         #
-        # 所以走专用法规 Parser。
+        # Parser 使用真实 Chapter。
+        #
+        # 对没有显式章节的法规，例如：
+        #
+        # 第一条 ...
+        # 第二条 ...
+        #
+        # Parser 会创建一个内部 implicit chapter，
+        # 保证下游仍然使用统一：
+        #
+        # Chapter -> Article
+        #
+        # 数据结构。
+
         chapters = parse_regulation(
             document.text
         )
 
         # 当前法规切分策略：
         #
-        # 一条 Article 对应一个 KnowledgeChunk。
+        # 一个 Article
+        # 对应一个 KnowledgeChunk。
+
         return build_regulation_chunks(
             document=document,
             chapters=chapters,
@@ -158,6 +179,7 @@ def build_chunks_for_document(
     # --------------------------------------------------
     # 2. Generic Section 类型文档
     # --------------------------------------------------
+
     if (
         manifest.document_type
         in GENERIC_SECTION_DOCUMENT_TYPES
@@ -183,6 +205,7 @@ def build_chunks_for_document(
         #
         # 因此这里可以使用完全相同的
         # Generic Section Parser。
+
         sections = parse_generic_sections(
             document.text
         )
@@ -201,6 +224,7 @@ def build_chunks_for_document(
         # - max_chars；
         #
         # 构建最终 KnowledgeChunk。
+
         return build_generic_section_chunks(
             document=document,
             sections=sections,
@@ -217,10 +241,145 @@ def build_chunks_for_document(
     # 静默继续处理反而可能制造错误 Chunk。
     #
     # 所以继续保持 fail-fast。
+
     raise ValueError(
         "当前 build pipeline 不支持的 "
         f"document_type：{manifest.document_type}"
     )
+
+
+def validate_document_coverage(
+    manifests: list[DocumentManifest],
+    chunks: list[KnowledgeChunk],
+) -> list[str]:
+    """
+    校验 Manifest 和最终 Corpus 之间的
+    document-level coverage。
+
+    解决的问题：
+
+        Chunk Validation PASS
+
+    并不意味着：
+
+        每篇 enabled 文档
+        都成功产生了 Chunk。
+
+    例如：
+
+        Manifest 中有 28 篇 enabled 文档，
+        其中 1 篇因为 Parser 结构不兼容
+        生成了 0 个 Chunk。
+
+    如果只验证已经存在的 Chunk，
+    整个数据集仍然可能显示：
+
+        PASS
+
+    但实际上 Corpus 已经缺失了一篇文档。
+
+    因此这里额外验证：
+
+        enabled_document_ids
+        ==
+        chunk_document_ids
+
+    当前主要检查两种错误：
+
+    1. Missing Document
+
+       Manifest 中 enabled，
+       但最终没有任何 Chunk。
+
+    2. Unexpected Document
+
+       Chunk 中出现了一个
+       当前 enabled Manifest 中不存在的 document_id。
+
+    返回：
+
+        list[str]
+
+    空列表：
+        Coverage PASS。
+
+    非空列表：
+        Coverage FAIL。
+    """
+
+    errors: list[str] = []
+
+    # --------------------------------------------------
+    # 1. Manifest 期望进入 Corpus 的文档
+    # --------------------------------------------------
+
+    enabled_document_ids = {
+        manifest.document_id
+        for manifest in manifests
+        if manifest.enabled
+    }
+
+    # --------------------------------------------------
+    # 2. 实际进入 Chunk Corpus 的文档
+    # --------------------------------------------------
+
+    chunk_document_ids = {
+        chunk.document_id
+        for chunk in chunks
+    }
+
+    # --------------------------------------------------
+    # 3. Missing Documents
+    # --------------------------------------------------
+    #
+    # Manifest 要求存在，
+    # 但是最终一个 Chunk 都没有。
+    #
+    # 这通常意味着：
+    #
+    # Loader
+    # Parser
+    # Chunker
+    #
+    # 某一层静默地产生了空结果。
+
+    missing_document_ids = sorted(
+        enabled_document_ids
+        - chunk_document_ids
+    )
+
+    for document_id in missing_document_ids:
+        errors.append(
+            "Enabled Manifest 文档没有生成任何 Chunk："
+            f"{document_id}"
+        )
+
+    # --------------------------------------------------
+    # 4. Unexpected Documents
+    # --------------------------------------------------
+    #
+    # 正常 build pipeline 中理论上不应发生。
+    #
+    # 但如果未来存在：
+    #
+    # stale data
+    # 外部 Chunk 合并
+    # pipeline bug
+    #
+    # 这里可以第一时间发现。
+
+    unexpected_document_ids = sorted(
+        chunk_document_ids
+        - enabled_document_ids
+    )
+
+    for document_id in unexpected_document_ids:
+        errors.append(
+            "Chunk Corpus 中存在未启用或不存在于 Manifest "
+            f"的 document_id：{document_id}"
+        )
+
+    return errors
 
 
 def main() -> None:
@@ -245,22 +404,30 @@ def main() -> None:
             ↓
         KnowledgeChunk[]
             ↓
-        Global Validation
+        Document Coverage Validation
+            ↓
+        Chunk-level Validation
             ↓
         chunks.jsonl
 
-    当前一个重要的数据质量原则是：
+    当前两个重要的数据质量原则：
 
-        validate before persistence
+    1. validate before persistence
 
-    即所有文档全部构建完成后，
-    先统一执行 Validator。
+       所有数据通过校验之后，
+       才允许覆盖正式 chunks.jsonl。
 
-    只有整个数据集完全通过，
-    才允许覆盖正式 chunks.jsonl。
+    2. validity != completeness
 
-    这样可以避免错误 Chunk
-    进一步污染后续 Qdrant。
+       每个 Chunk 本身合法，
+       不代表 Manifest 中所有文档
+       都完整进入了知识库。
+
+    所以当前同时验证：
+
+        Document Coverage
+        +
+        Chunk Validity
     """
 
     manifest_path = Path(
@@ -286,6 +453,7 @@ def main() -> None:
     # --------------------------------------------------
 
     for manifest in manifests:
+
         # 被禁用的文档不进入当前知识库。
         if not manifest.enabled:
             continue
@@ -309,6 +477,7 @@ def main() -> None:
         # 选择对应的：
         #
         # Parser + Chunker。
+
         chunks = build_chunks_for_document(
             manifest
         )
@@ -317,23 +486,81 @@ def main() -> None:
             f"  生成 Chunk：{len(chunks)}"
         )
 
-        # extend：
+        # 注意：
         #
-        # 当前 chunks 本身是：
+        # 这里暂时不直接因为：
         #
-        # list[KnowledgeChunk]
+        #     len(chunks) == 0
         #
-        # 所以这里不是把整个 list
-        # 当成一个元素 append，
-        # 而是把里面的每个 KnowledgeChunk
-        # 加入全局数据集。
+        # 就立即 raise。
+        #
+        # 原因是我们希望先把所有文档跑完，
+        # 再通过 Document Coverage Validation
+        # 一次性打印出所有缺失文档。
+        #
+        # 如果未来同时有 3 篇文档失败，
+        # 用户不需要修一篇、重跑一次，
+        # 才发现下一篇。
+
         all_chunks.extend(
             chunks
         )
 
     # --------------------------------------------------
-    # 3. 写盘前统一做数据质量校验
+    # 3. Document-level Coverage Validation
     # --------------------------------------------------
+
+    coverage_errors = (
+        validate_document_coverage(
+            manifests=manifests,
+            chunks=all_chunks,
+        )
+    )
+
+    if coverage_errors:
+        print()
+        print(
+            "=" * 80
+        )
+
+        print(
+            "文档覆盖完整性校验失败："
+        )
+
+        for error in coverage_errors:
+            print(
+                f"- {error}"
+            )
+
+        # ------------------------------------------------
+        # Fail Fast
+        # ------------------------------------------------
+        #
+        # 即使所有已生成 Chunk
+        # 在 schema 层面都是合法的，
+        # 只要 Manifest 中存在 enabled 文档
+        # 没有成功进入 Corpus，
+        #
+        # 就不允许覆盖正式 chunks.jsonl。
+
+        raise ValueError(
+            "Manifest -> Corpus "
+            "文档覆盖完整性校验失败"
+        )
+
+    # --------------------------------------------------
+    # 4. Chunk-level Validation
+    # --------------------------------------------------
+    #
+    # Coverage Validation 回答：
+    #
+    #     文档有没有全部进来？
+    #
+    # validate_chunks 回答：
+    #
+    #     进来的 Chunk 本身是否合法？
+    #
+    # 两者职责不同，不能互相替代。
 
     errors = validate_chunks(
         all_chunks
@@ -359,12 +586,13 @@ def main() -> None:
         # 这里 fail-fast，
         # 可以避免后续 Qdrant
         # 被错误数据污染。
+
         raise ValueError(
             "KnowledgeChunk 数据校验失败"
         )
 
     # --------------------------------------------------
-    # 4. 校验通过后才真正持久化
+    # 5. 校验通过后才真正持久化
     # --------------------------------------------------
 
     write_chunks_jsonl(
@@ -373,13 +601,36 @@ def main() -> None:
     )
 
     # --------------------------------------------------
-    # 5. 输出构建摘要
+    # 6. 输出构建摘要
     # --------------------------------------------------
+
+    enabled_document_count = sum(
+        1
+        for manifest in manifests
+        if manifest.enabled
+    )
+
+    chunk_document_count = len(
+        {
+            chunk.document_id
+            for chunk in all_chunks
+        }
+    )
 
     print()
 
     print(
         "=" * 80
+    )
+
+    print(
+        f"Enabled 文档数："
+        f"{enabled_document_count}"
+    )
+
+    print(
+        f"进入 Corpus 的文档数："
+        f"{chunk_document_count}"
     )
 
     print(
@@ -391,7 +642,11 @@ def main() -> None:
     )
 
     print(
-        "数据校验：PASS"
+        "文档覆盖校验：PASS"
+    )
+
+    print(
+        "Chunk 数据校验：PASS"
     )
 
 

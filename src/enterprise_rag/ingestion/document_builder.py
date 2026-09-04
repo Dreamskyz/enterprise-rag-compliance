@@ -6,6 +6,7 @@ from enterprise_rag.ingestion.loaders.html_loader import (
     extract_cac_article,
     extract_fastapi_article,
     extract_owasp_article,
+    extract_qdrant_article,
 )
 from enterprise_rag.ingestion.manifest import DocumentManifest
 from enterprise_rag.ingestion.models import NormalizedDocument
@@ -22,7 +23,7 @@ def build_normalized_document(
     根据 Manifest 加载原始文档，
     并构建统一的 NormalizedDocument。
 
-    当前支持三类文档：
+    当前支持三类“语义文档类型”：
 
     1. regulation
 
@@ -40,8 +41,16 @@ def build_normalized_document(
 
     3. technical_documentation
 
-       FastAPI 官方技术文档 HTML
+       当前包含两个技术文档来源：
+
+       FastAPI
        -> extract_fastapi_article()
+
+       Qdrant
+       -> extract_qdrant_article()
+
+       两者最终都继续：
+
        -> normalize_structured_text()
        -> Markdown-like 结构化文本
 
@@ -49,6 +58,7 @@ def build_normalized_document(
 
     - Loader 不同；
     - DOM 结构不同；
+    - 数据源特有清洗规则不同；
     - Normalizer 策略可能不同；
 
     但最终都会转换成统一的：
@@ -67,7 +77,12 @@ def build_normalized_document(
         security_guideline
         technical_documentation
 
-    它不是 HTML / PDF / Markdown
+    它不是：
+
+        HTML
+        PDF
+        Markdown
+
     这种文件格式字段。
 
     同样：
@@ -76,6 +91,40 @@ def build_normalized_document(
 
     表示资料来源/权威性，
     也不应该被用来表达网页格式。
+
+    ------------------------------------------------------
+    关于 FastAPI / Qdrant 的 Loader Routing
+    ------------------------------------------------------
+
+    当前 Manifest 尚未引入：
+
+        provider
+        loader_type
+
+    这样的显式字段。
+
+    因此当前 V1 对：
+
+        technical_documentation
+
+    使用稳定的 document_id 前缀判断：
+
+        fastapi_*
+        qdrant_*
+
+    来选择 site-specific Loader。
+
+    这是当前作品级项目中比较简单透明的方案。
+
+    如果未来数据源继续扩展，
+    可以进一步把：
+
+        loader_type
+
+    显式放入 Manifest，
+
+    从而避免 document_id 与 Loader
+    之间存在隐含约定。
     """
 
     # Manifest 中保存的是原始文件本地路径。
@@ -155,9 +204,6 @@ def build_normalized_document(
         #
         # 识别段落边界，
         # 从而优先按自然段组织 Chunk。
-        #
-        # 因此不能再使用会删除所有空行的
-        # normalize_text()。
         normalized_text = (
             normalize_structured_text(
                 raw_text
@@ -165,52 +211,89 @@ def build_normalized_document(
         )
 
     # --------------------------------------------------
-    # 3. FastAPI 技术文档
+    # 3. 技术文档
     # --------------------------------------------------
     elif (
         manifest.document_type
         == "technical_documentation"
     ):
-        # FastAPI Loader：
-        #
-        # 从：
-        #
-        # <article class="md-content__inner md-typeset">
-        #
-        # 中提取真正的技术正文，
-        # 并过滤：
-        #
-        # - 顶部导航；
-        # - 左右侧栏；
-        # - Footer；
-        # - Header anchor；
-        # - details 中的旧版本重复代码。
-        #
-        # 同时保留：
-        #
-        # - Heading；
-        # - Paragraph；
-        # - List；
-        # - Code Block。
-        raw_text = extract_fastapi_article(
-            path
-        )
+        # --------------------------------------------------
+        # 3.1 FastAPI
+        # --------------------------------------------------
+        if manifest.document_id.startswith(
+            "fastapi_"
+        ):
+            # FastAPI Loader：
+            #
+            # 正文：
+            #
+            # <article
+            #     class="md-content__inner md-typeset"
+            # >
+            #
+            # 并过滤：
+            #
+            # - 全站导航；
+            # - Header anchor；
+            # - details 中重复版本示例。
+            raw_text = extract_fastapi_article(
+                path
+            )
 
-        # FastAPI 与 OWASP 在“来源网站”上不同，
-        # 但进入这一层后，
-        # 二者都已经变成 Markdown-like
-        # structured text。
+        # --------------------------------------------------
+        # 3.2 Qdrant
+        # --------------------------------------------------
+        elif manifest.document_id.startswith(
+            "qdrant_"
+        ):
+            # Qdrant Loader：
+            #
+            # 正文：
+            #
+            # <article
+            #     class="documentation-article"
+            # >
+            #
+            # 同时执行：
+            #
+            # 1. 保留 Heading / Paragraph / List；
+            # 2. 保留重要 aside 技术提示；
+            # 3. 保留 JSON / HTTP / Python 示例；
+            # 4. 删除重复的其他 SDK 示例。
+            raw_text = extract_qdrant_article(
+                path
+            )
+
+        # --------------------------------------------------
+        # 3.3 technical_documentation 有新来源，
+        #     但尚未定义 Loader。
+        # --------------------------------------------------
+        else:
+            raise ValueError(
+                "当前 technical_documentation "
+                "没有对应 Loader："
+                f"{manifest.document_id}"
+            )
+
+        # FastAPI / Qdrant 虽然来自不同网站，
+        # 但是经过 site-specific Loader 后，
+        # 都已经被转换成：
         #
-        # 因此它们共享同一个
-        # structured normalizer。
+        # Markdown-like structured text
         #
-        # 这是非常重要的架构收敛：
+        # 因此继续共享统一 Normalizer。
         #
-        # Site-specific Loader
-        #         ↓
-        # Unified Structured Text
-        #         ↓
-        # Generic Parser / Chunker
+        # 架构：
+        #
+        # FastAPI Loader ─┐
+        #                 ├─> Structured Text
+        # Qdrant Loader ──┘
+        #                         ↓
+        #              Structured Normalizer
+        #                         ↓
+        #               Generic Parser
+        #                         ↓
+        #               Generic Chunker
         normalized_text = (
             normalize_structured_text(
                 raw_text

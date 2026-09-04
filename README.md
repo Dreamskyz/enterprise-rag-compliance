@@ -1,93 +1,310 @@
 # Enterprise RAG Compliance
 
-企业 AI 合规与应用规范助手。
+> 企业 AI 合规与应用规范助手
 
-这是一个面向企业内部 RAG / Agent 研发人员与管理员的知识库问答系统。
+面向企业内部 **RAG / Agent 研发人员与管理员** 的垂直知识库问答系统。
 
-项目目标不是构建“万能知识库”，而是围绕：
+项目不是构建“万能知识库”，而是围绕：
 
 - 生成式人工智能合规；
-- 深度合成服务规范；
-- LLM 应用安全；
-- 企业内部技术规范；
+- 深度合成与算法治理；
+- 个人信息与数据安全；
+- OWASP LLM 应用安全；
+- FastAPI / Qdrant 企业内部技术规范模拟；
 
-构建一套：
+实现一套：
 
 ```text
 有依据才回答
 无依据必须拒答
-支持 ACL
-支持混合检索
-支持 Rerank
-支持 Citation
-支持离线评测
-支持 Failure Analysis
-支持 Regression Evaluation
+权限隔离
+混合检索
+Rerank
+可追溯 Citation
+离线评测
+Failure Analysis
+Regression Evaluation
 ```
 
 的可解释 RAG 系统。
 
-> 当前项目仍处于持续迭代阶段。当前 Corpus 和 Evaluation Dataset 规模仍然较小，主要用于验证系统架构、评测方法与优化闭环，不代表生产环境准确率或 SLA。
+> 当前项目定位为单人可完成的校招作品级企业 RAG 骨架，用于展示完整的系统设计、评测方法与工程取舍，不代表生产环境准确率、可靠性保证或 SLA。
 
 ---
 
-# 1. Project Goals
+# 1. Final Results at a Glance
 
-本项目希望解决的核心问题不是：
+## 1.1 Knowledge Base
 
-```text
-“怎么调用一个 LLM API”
-```
-
-而是：
-
-```text
-企业 RAG 系统如何做到：
-
-正确检索
-↓
-权限隔离
-↓
-证据约束
-↓
-无依据拒答
-↓
-引用可追溯
-↓
-效果可评测
-↓
-失败可定位
-↓
-优化可回归验证
-```
-
-因此系统重点实现以下能力：
-
-- 结构化知识库构建；
-- 异构文档 Ingestion；
-- Dense / BM25 / Hybrid Retrieval；
-- RRF Fusion；
-- bge-reranker 精排；
-- Retrieval 前置 ACL；
-- Evidence Relevance Gate；
-- Evidence-Constrained Generation；
-- Structured Refusal；
-- Deterministic Citation Validation；
-- Retrieval Evaluation；
-- Answer / Refusal Evaluation；
-- Citation Evaluation；
-- Latency Benchmark；
-- Prompt Regression Evaluation；
-- Evaluation Snapshot Persistence；
-- Role-aware Evaluation；
-- Retrieval Failure Analysis；
-- Gold Integrity Validation。
+| Item | Result |
+|---|---:|
+| Documents | **28** |
+| KnowledgeChunks | **835** |
+| Qdrant Points | **835** |
+| Manifest → Corpus Coverage | **PASS** |
+| Chunk Validation | **PASS** |
 
 ---
 
-# 2. Tech Stack
+## 1.2 Final Retrieval Evaluation · V3
 
-当前主要技术栈：
+V3：
+
+```text
+46 total cases
+36 answerable
+10 unanswerable
+```
+
+| Method | Recall@1 | Recall@3 | Recall@5 | Recall@10 | MRR@10 |
+|---|---:|---:|---:|---:|---:|
+| Dense | 0.8472 | 0.9722 | **1.0000** | **1.0000** | 0.9130 |
+| BM25 | 0.5139 | 0.6528 | 0.7083 | 0.7778 | 0.6051 |
+| Hybrid RRF | 0.7639 | 0.9028 | 0.9444 | **1.0000** | 0.8509 |
+| Hybrid + Rerank | 0.8472 | **0.9861** | **0.9861** | **1.0000** | **0.9259** |
+
+---
+
+## 1.3 Final Full-RAG Evaluation · V3 run_003
+
+| Metric | Result |
+|---|---:|
+| Cases | 46 |
+| TP | 35 |
+| TN | 10 |
+| FP | **0** |
+| FN | 1 |
+| Overall Decision Accuracy | **97.83%** |
+| Answerable Accuracy | **97.22%** |
+| Refusal Accuracy | **100.00%** |
+| Hard Negative Refusal Accuracy | **100.00%** |
+| OOD Refusal Accuracy | **100.00%** |
+
+对于本项目：
+
+```text
+无依据必须拒答
+```
+
+的目标，当前最重要的结果之一是：
+
+```text
+10 / 10 Unanswerable
+全部正确拒答
+
+False Positive = 0
+```
+
+> 以上结果来自当前冻结的 V3 Benchmark，不代表生产环境准确率或 SLA。
+
+---
+
+## 1.4 Citation Evaluation
+
+| Metric | All-case | Strict |
+|---|---:|---:|
+| Citation Precision | 0.8629 | 0.8944 |
+| Citation Recall | 0.9690 | **0.9917** |
+| Citation Hit Rate | **1.0000** | **1.0000** |
+
+当前 Citation 的主要问题是：
+
+```text
+Over-Citation
+```
+
+而不是完全没有引用到正确证据。
+
+---
+
+# 2. Project Highlights
+
+这个项目最终留下了几个比“用了哪些框架”更重要的实验结论。
+
+### Hybrid Retrieval ≠ Automatically Better
+
+```text
+Strong Dense
++
+Weak Cross-lingual BM25
+↓
+Equal-weight RRF
+↓
+可能降低正确 Gold 的排名
+```
+
+V3：
+
+```text
+Dense MRR       = 0.9130
+Hybrid RRF MRR  = 0.8509
+```
+
+说明 Hybrid 必须经过真实 Corpus Evaluation，而不能因为架构更复杂就默认更好。
+
+---
+
+### Rerank Can Repair Fusion Noise
+
+V3：
+
+```text
+Hybrid RRF MRR        = 0.8509
+Hybrid + Rerank MRR   = 0.9259
+```
+
+Reranker 能修复多起 RRF Rank Degradation。
+
+但：
+
+```text
+Single-Passage Relevance
+≠
+Evidence-Set Coverage
+```
+
+R044 表明 Reranker 把单个 Passage 排得更相关，并不天然保证复合问题需要的所有 Evidence 都进入最终 Top-K。
+
+---
+
+### ACL Must Be Applied Before Retrieval
+
+```text
+Role
+↓
+Authorized Candidate Space
+↓
+Dense / BM25
+↓
+Fusion
+↓
+Rerank
+```
+
+而不是：
+
+```text
+全库检索
+↓
+最后过滤 Unauthorized Chunk
+```
+
+R042 / R045 使用同一个 Query、不同 Role，形成了端到端 ACL 对照实验。
+
+---
+
+### Retrieval Relevance ≠ Answerability
+
+```text
+Evidence 与问题高度相关
+```
+
+不代表：
+
+```text
+Evidence 已经包含回答问题需要的全部事实
+```
+
+因此当前系统采用：
+
+```text
+Coarse Evidence Gate
++
+Evidence-Constrained Generation
+```
+
+而不是一个 rerank score threshold 直接决定 Answer / Refuse。
+
+---
+
+### Evaluation Infrastructure Also Needs Testing
+
+开发过程中实际遇到：
+
+```text
+Dataset 中有 role
+≠
+Evaluation Harness 真正执行 role
+```
+
+以及：
+
+```text
+LLM 被要求输出 JSON
+≠
+每次都满足 Structured Output Contract
+```
+
+最终分别通过：
+
+```text
+Role Propagation Regression Test
+Strict Parser
+Bounded Structured-output Retry
+Checkpoint / Resume
+```
+
+解决。
+
+---
+
+# 3. Why This Project
+
+这个项目重点解决的不是：
+
+```text
+“如何调用一个大模型 API”
+```
+
+而是一个企业 RAG 系统真正需要面对的问题：
+
+```text
+文档如何可靠进入知识库？
+        ↓
+如何召回正确证据？
+        ↓
+不同用户能看到哪些证据？
+        ↓
+Hybrid / Rerank 是否真的有效？
+        ↓
+证据相关是否等于能够回答？
+        ↓
+无依据时如何拒答？
+        ↓
+Citation 如何防止模型伪造？
+        ↓
+系统效果如何量化？
+        ↓
+出现 Failure 后如何定位？
+        ↓
+改动后如何验证没有 Regression？
+```
+
+因此本项目实现：
+
+```text
+Structure-aware Ingestion
+Manifest → Corpus Coverage Validation
+Unified KnowledgeChunk
+BGE-M3 Dense Retrieval
+BM25 Retrieval
+RRF Hybrid Fusion
+bge-reranker-v2-m3
+Pre-Retrieval ACL
+Coarse Evidence Gate
+Evidence-Constrained Generation
+Structured Refusal
+Deterministic Citation Validation
+Role-aware Evaluation
+Retrieval / Answer / Citation Evaluation
+Failure Analysis
+Checkpoint / Resume
+Frozen Regression Benchmark
+```
+
+---
+
+# 4. Tech Stack
 
 ```text
 Python 3.11
@@ -99,6 +316,7 @@ bge-reranker-v2-m3
 BM25
 Jieba
 SiliconFlow OpenAI-compatible API
+Streamlit
 pytest
 Docker
 ```
@@ -111,192 +329,367 @@ Windows
 RTX 4060 Laptop GPU
 ```
 
+Embedding：
+
+```text
+BAAI/bge-m3
+1024 dimensions
+```
+
+Reranker：
+
+```text
+BAAI/bge-reranker-v2-m3
+```
+
+LLM：
+
+```text
+deepseek-ai/DeepSeek-V4-Flash
+```
+
+通过：
+
+```text
+SiliconFlow OpenAI-compatible API
+```
+
+调用。
+
 ---
 
-# 3. Current Knowledge Base
+# 5. System Architecture
 
-当前 Corpus V2 包含 5 篇公开文档，覆盖：
-
-```text
-中国法规
-+
-LLM 应用安全
-+
-FastAPI 技术文档
-```
-
-当前文档：
+当前系统由三条核心链路组成：
 
 ```text
-1. 《生成式人工智能服务管理暂行办法》
+Offline Ingestion
+→ 异构文档转换为统一 KnowledgeChunk
 
-2. 《互联网信息服务深度合成管理规定》
+Online RAG
+→ ACL-aware Retrieval
+→ Rerank
+→ Evidence Gate
+→ Grounded Generation
 
-3. OWASP LLM01:2025 Prompt Injection
-
-4. FastAPI Dependencies
-
-5. FastAPI Lifespan Events
-```
-
-当前结构化后共得到：
-
-```text
-104 chunks
-```
-
-按文档统计：
-
-```text
-cn_genai_interim_2023                  24
-cn_deep_synthesis_2022                25
-owasp_llm01_prompt_injection_2025     25
-fastapi_dependencies                  17
-fastapi_lifespan                      13
-```
-
-按 Document Type：
-
-```text
-regulation                 49
-security_guideline         25
-technical_documentation    30
-```
-
-按 Access Level：
-
-```text
-public       74
-developer    30
-```
-
-其中 FastAPI 官方文档本身是公开资料。
-
-项目中将 FastAPI 文档标记为：
-
-```text
-access_level = developer
-```
-
-只是为了模拟企业内部技术规范的 ACL 场景，并不表示 FastAPI 官方文档本身具有真实访问限制。
-
-后续计划继续加入：
-
-```text
-更多 OWASP LLM Top 10 文档
-Qdrant 官方技术文档
-更多企业内部技术规范模拟文档
-```
-
-长期目标 Corpus：
-
-```text
-30–80 documents
+Evaluation
+→ Frozen Dataset
+→ Retrieval / Answer / Citation
+→ Failure Analysis
 ```
 
 ---
 
-# 4. System Architecture
+## 5.1 Offline Ingestion
 
-当前离线知识库构建已经从“法规专用 Pipeline”升级为支持多种文档结构的异构 Ingestion Pipeline：
+```mermaid
+flowchart TD
 
-```text
-Public Documents
-        ↓
-Document Manifest
-        ↓
-Raw HTML
-        ↓
-Document-specific Loader
-        ↓
-Normalizer
-        ↓
-Document-Type Router
-        ↓
-┌──────────────────────────────┐
-│ Regulation Parser            │
-│ Generic Section Parser       │
-└──────────────────────────────┘
-        ↓
-Structure-aware Chunker
-        ↓
-Unified KnowledgeChunk
-        ↓
-Corpus Validation
-        ↓
-chunks.jsonl
-        ↓
-Embedding / BM25 Index
-        ↓
-Qdrant
+    A["Public Documents"] --> B["Document Manifest"]
+    B --> C["Downloader"]
+    C --> D["Raw HTML"]
+
+    D --> E["Document-specific Loader"]
+    E --> F["Normalizer"]
+    F --> G{"Document Type Router"}
+
+    G -->|Regulation| H["Regulation Parser"]
+    G -->|Security / Technical| I["Generic Section Parser"]
+
+    H --> J["Article-aware Chunker"]
+    I --> K["Section-aware Chunker"]
+
+    J --> L["Unified KnowledgeChunk"]
+    K --> L
+
+    L --> M["Manifest → Corpus Coverage Validation"]
+    M --> N["Chunk Validation"]
+
+    N --> O["chunks.jsonl"]
+
+    O --> P["BGE-M3 Embedding"]
+    O --> Q["BM25 Index"]
+
+    P --> R["Qdrant Vector Store"]
+    Q --> S["Authorized BM25 Corpus"]
 ```
-
-当前 Document Type Router：
-
-```text
-regulation
-→ Regulation Parser
-→ Article-aware Chunking
-
-security_guideline
-→ Generic Section Parser
-→ Section-aware Chunking
-
-technical_documentation
-→ Generic Section Parser
-→ Section-aware Chunking
-```
-
-所有文档最终统一进入：
-
-```text
-KnowledgeChunk
-```
-
-避免不同数据源向下游暴露不同的数据结构。
 
 ---
 
-## Online Query Pipeline
+## 5.2 Online Query Pipeline
+
+```mermaid
+flowchart TD
+
+    A["HTTP Request"] --> B["FastAPI"]
+    B --> C["AccessContext"]
+
+    C --> D["ACL Policy"]
+
+    D --> E1["Qdrant Payload Filter"]
+    D --> E2["Authorized BM25 Corpus"]
+
+    E1 --> F1["BGE-M3 Dense Retrieval"]
+    E2 --> F2["BM25 Retrieval"]
+
+    F1 --> G["RRF Fusion"]
+    F2 --> G
+
+    G --> H["bge-reranker-v2-m3"]
+
+    H --> I["Final Top-K Evidence"]
+
+    I --> J["Coarse Evidence Gate"]
+
+    J -->|Clearly irrelevant| K["Programmatic Refusal"]
+    J -->|Relevant enough| L["Evidence-Constrained Generation"]
+
+    L --> M{"Evidence Sufficient?"}
+
+    M -->|No| N["Structured Refusal"]
+    M -->|Yes| O["Grounded Answer"]
+
+    O --> P["Deterministic Citation Validation"]
+
+    P --> Q["HTTP Response"]
+    N --> Q
+    K --> Q
+```
+
+---
+
+## 5.3 Evaluation Pipeline
+
+```mermaid
+flowchart TD
+
+    A["Frozen Evaluation Dataset"] --> B["Gold Integrity Check"]
+
+    B --> C["Role-aware Retrieval Evaluation"]
+
+    C --> D1["Dense"]
+    C --> D2["BM25"]
+    C --> D3["Hybrid RRF"]
+    C --> D4["Hybrid + Rerank"]
+
+    D1 --> E["Recall@K / MRR"]
+    D2 --> E
+    D3 --> E
+    D4 --> E
+
+    E --> F["Failure Analysis"]
+
+    F --> G["Evidence Gate Audit"]
+
+    G --> H["Full-RAG Evaluation"]
+
+    H --> I1["Answer / Refusal Metrics"]
+    H --> I2["Citation Metrics"]
+
+    I1 --> J["Case-level Checkpoint"]
+    I2 --> J
+
+    J --> K["Immutable JSONL Snapshot"]
+
+    K --> L["Offline Analysis / Regression"]
+```
+
+---
+
+# 6. Demo Preview
+
+Streamlit Demo 只作为 Client，通过 HTTP 调用 FastAPI Backend：
 
 ```text
-HTTP Request
-        ↓
+Streamlit
+↓ HTTP
 FastAPI
-        ↓
-AccessContext
-        ↓
+↓
 ACL-aware Retrieval
-        ↓
-┌───────────────────────┐
-│ Dense Retrieval       │
-│ BM25 Retrieval        │
-└───────────────────────┘
-        ↓
-RRF Fusion
-        ↓
-bge-reranker-v2-m3
-        ↓
-Coarse Relevance Gate
-        ↓
+↓
+RRF
+↓
+Rerank
+↓
+Evidence Gate
+↓
 Evidence-Constrained Generation
-        ↓
-Answer / Structured Refusal
-        ↓
-Deterministic Citation Validation
-        ↓
-HTTP Response
+```
+
+Streamlit 不直接：
+
+```text
+加载 BGE-M3
+加载 Reranker
+连接 Qdrant
+调用 QueryService
+读取 LLM API Key
+```
+
+Demo 会展示：
+
+```text
+Role
+Decision
+Gate Result
+Top Rerank Score
+Citation
+Retrieved Evidence
+Dense / BM25 Rank
+RRF / Rerank Score
 ```
 
 ---
 
-# 5. Ingestion Pipeline
+## 6.1 Grounded Answer
 
-## Regulation
+Developer 查询 Qdrant Payload Filter：
 
-法规文档不会直接按固定字符长度粗暴切分。
+![Developer Grounded Answer](docs/images/demo_qdrant_developer_answer.png)
 
-当前采用：
+```text
+role     = developer
+decision = ANSWER
+gate     = passed
+```
+
+授权角色能够检索：
+
+```text
+developer
+```
+
+级别的 Qdrant 技术规范，并生成带 Citation 的 Grounded Answer。
+
+---
+
+## 6.2 ACL Same-Query Refusal
+
+保持 Query 完全不变，仅将角色切换为：
+
+```text
+guest
+```
+
+Qdrant `developer` Chunk 会在 Candidate Generation 前被排除：
+
+![Guest ACL Refusal](docs/images/demo_qdrant_guest_acl_refusal.png)
+
+```text
+role        = guest
+decision    = REFUSE
+gate        = below_threshold
+top score   = -7.3516
+```
+
+这验证：
+
+> ACL 发生在 Retrieval 前，而不是生成后过滤答案。
+
+---
+
+## 6.3 Relevant Evidence ≠ Sufficient Evidence
+
+R044：
+
+```text
+Qdrant Hybrid Queries 支持哪些融合方式，
+RRF 的作用是什么？
+```
+
+![Evidence Coverage Refusal](docs/images/demo_evidence_coverage_refusal.png)
+
+系统结果：
+
+```text
+role     = developer
+gate     = passed
+decision = REFUSE
+```
+
+Retriever 找到了高度相关的 RRF Evidence，但最终 Evidence Set 没有完整覆盖复合问题的两个部分。
+
+因此：
+
+> **Single-Passage Relevance ≠ Evidence-Set Coverage**
+
+系统选择拒答，而不是依赖模型外部知识补齐。
+
+---
+
+# 7. Knowledge Base
+
+当前 Corpus：
+
+```text
+28 documents
+835 KnowledgeChunks
+```
+
+覆盖三类主要知识：
+
+```text
+中国法规 / 规范
++
+OWASP LLM Top 10
++
+FastAPI / Qdrant Technical Documentation
+```
+
+部分法规包括：
+
+```text
+《生成式人工智能服务管理暂行办法》
+
+《互联网信息服务深度合成管理规定》
+
+《中华人民共和国个人信息保护法》
+
+《中华人民共和国数据安全法》
+
+《网络数据安全管理条例》
+
+《互联网信息服务算法推荐管理规定》
+
+《人工智能生成合成内容标识办法》
+
+《中华人民共和国网络安全法（2025修正版）》
+```
+
+安全规范：
+
+```text
+OWASP Top 10 for LLM Applications
+LLM01 – LLM10
+```
+
+技术文档包括：
+
+```text
+FastAPI Dependencies
+FastAPI Lifespan
+
+Qdrant Points
+Qdrant Vectors
+Qdrant Payload
+Qdrant Collections
+Qdrant Indexing
+Qdrant Search
+Qdrant Filtering
+Qdrant Hybrid Queries
+```
+
+> FastAPI / Qdrant 官方文档本身均为公开资料。项目中将部分技术文档设置为 `developer` Access Level，仅用于模拟企业内部技术规范 ACL，不表示这些官方资料存在真实访问限制。
+
+---
+
+# 8. Ingestion Design
+
+## 8.1 Regulation
+
+法规不使用简单固定长度切分。
+
+当前流程：
 
 ```text
 Regulation
@@ -308,43 +701,65 @@ Article
 KnowledgeChunk
 ```
 
-当前规则：
+基本原则：
 
 ```text
-一个法规条文 = 一个 Chunk
+一个法规条文
+≈
+一个语义 Chunk
 ```
 
-不做：
+法规天然具有明确条款边界。
 
-```text
-Fixed-size Character Split
-Sliding Window
-Arbitrary Overlap
-```
-
-原因是法规文档天然具有较强的条款结构。
-
-如果把：
+如果将：
 
 ```text
 第七条
 ```
 
-从中间切开，会破坏：
+从中间任意截断，会破坏：
 
 ```text
-法规语义完整性
+语义完整性
 Citation 可读性
 Gold Annotation
 ```
 
-因此法规采用 Article-aware structure-aware chunking。
+因此法规采用：
+
+```text
+Article-aware Structure-aware Chunking
+```
+
+对于没有显式：
+
+```text
+第一章
+第二章
+```
+
+但直接出现：
+
+```text
+第一条
+第二条
+...
+```
+
+的法规，也支持隐式 Chapter，避免文档因缺少 Chapter Heading 而生成 0 Chunk。
 
 ---
 
-## Security / Technical Documentation
+## 8.2 Security / Technical Documentation
 
-OWASP 和 FastAPI 不具有“第几章 / 第几条”的法规结构。
+OWASP、FastAPI、Qdrant 不具有法规式：
+
+```text
+第几章
+第几条
+```
+
+结构。
 
 因此采用：
 
@@ -363,43 +778,32 @@ Section-aware Chunker
 KnowledgeChunk
 ```
 
-例如：
+Section 较长时：
 
 ```text
-Dependencies
->
-First Steps
->
-Create a dependency, or "dependable"
-```
-
-会保存为：
-
-```text
-section_path
-```
-
-如果一个 Section 内容过长，则优先：
-
-```text
-按自然段聚合
+优先按自然段聚合
 ```
 
 只有单个段落本身超长时才进行硬切分。
 
-当前通用 Section Chunk 上限：
+目标不是让所有 Chunk 长度完全一致，而是：
 
 ```text
-1200 characters
+优先保留结构边界
+优先保留语义完整性
 ```
-
-目标不是让所有 Chunk 长度一致，而是尽量保留结构和语义边界。
 
 ---
 
-# 6. KnowledgeChunk
+# 9. Unified KnowledgeChunk
 
-当前统一 Chunk Schema 核心字段包括：
+所有数据源最终统一进入：
+
+```text
+KnowledgeChunk
+```
+
+核心字段：
 
 ```text
 chunk_id
@@ -426,32 +830,7 @@ chunk_index
 content_hash
 ```
 
-其中法规字段：
-
-```text
-chapter_number
-chapter_title
-article_number
-```
-
-在技术文档中允许为：
-
-```text
-None
-```
-
-而通用文档使用：
-
-```text
-section_title
-section_path
-```
-
-描述结构层级。
-
----
-
-## content
+其中：
 
 ```text
 content
@@ -459,129 +838,104 @@ content
 
 保存真实正文。
 
----
-
-## retrieval_text
-
 ```text
 retrieval_text
 ```
 
-用于 Retrieval。
-
-法规通常包含：
+用于 Retrieval，会加入有助于检索的：
 
 ```text
 Document Title
-Chapter
-Article Number
-Content
-```
-
-通用文档通常包含：
-
-```text
-Document Title
+Chapter / Article
 Section Path
 Content
 ```
 
-但不会把：
+不会把：
 
 ```text
 source_url
 access_level
 ```
 
-等与语义检索无关的信息加入 Retrieval Text。
+等与语义相关性无关的信息强行加入 Retrieval Text。
 
 ---
 
-# 7. Corpus Validation
+# 10. Corpus Validation
 
-构建后的 Corpus 不会直接写入向量库。
-
-首先执行 Schema Validation，检查：
+项目区分：
 
 ```text
-chunk_id
-document_id
-document_type
-content
-retrieval_text
-access_level
-content_hash
-chunk_index
+Chunk 是否合法？
 ```
 
-以及不同 Document Type 对应的结构字段。
-
-例如：
+与：
 
 ```text
-regulation
-→ article_number 必须存在
-
-security_guideline
-technical_documentation
-→ section_title / section_path 必须存在
+Manifest 中启用的文档
+是否真的进入 Corpus？
 ```
 
-除此之外，还进行了 Corpus-level Inspection：
+开发过程中曾真实出现：
 
 ```text
-Document Distribution
-Document Type Distribution
-ACL Distribution
-Chunk Length Distribution
-Duplicate Chunk ID
-Duplicate Content Hash
-Near-max Chunk
-Multi-part Section Boundary
+enabled document
+↓
+下载成功
+↓
+Normalization 成功
+↓
+Parser 生成 0 Article
+↓
+最终生成 0 Chunk
 ```
 
-Corpus V2 当前：
+但已有：
 
 ```text
-Duplicate Chunk ID = 0
-Duplicate Content Hash Group = 0
+Chunk Validation
 ```
+
+仍然能够 PASS。
+
+原因是它只检查：
+
+```text
+已经生成出的 Chunk 是否合法
+```
+
+不会发现：
+
+```text
+某篇 enabled document
+根本没有进入 Corpus
+```
+
+因此增加：
+
+```text
+Manifest → Corpus Coverage Validation
+```
+
+当前：
+
+```text
+28 enabled documents
+28 Corpus documents
+
+Coverage = PASS
+```
+
+因此得到一个重要工程结论：
+
+> **Chunk Validity ≠ Manifest-to-Corpus Completeness**
 
 ---
 
-# 8. Dense Retrieval
+# 11. Dense Retrieval
 
-Embedding Model：
-
-```text
-BAAI/bge-m3
-```
-
-当前使用：
-
-```text
-Dense Embedding Dimension = 1024
-```
-
-向量存储：
-
-```text
-Qdrant
-```
-
-Collection：
-
-```text
-compliance_chunks_v1
-```
-
-Distance：
-
-```text
-Cosine
-```
-
-Dense Retrieval Pipeline：
+Dense：
 
 ```text
 Query
@@ -590,72 +944,103 @@ BGE-M3
 ↓
 1024-d Dense Vector
 ↓
-ACL Qdrant Filter
+Qdrant ACL Filter
 ↓
-Qdrant Search
-↓
-Top-K
+Dense Search
 ```
 
-Corpus V2 Evaluation 显示：
+当前 Corpus 同时包含：
+
+```text
+中文法规
+英文 OWASP
+英文 FastAPI
+英文 Qdrant
+```
+
+很多 Evaluation Query 使用中文。
+
+实验中 BGE-M3 能完成：
 
 ```text
 中文 Query
-→ BGE-M3
-→ 英文 OWASP / FastAPI
+↓
+英文 Evidence
 ```
 
-能够保持较稳定的跨语言语义检索能力。
+的跨语言语义匹配。
+
+因此：
+
+> BGE-M3 Dense 是当前中英混合 Corpus 上最稳定的基础 Retriever。
 
 ---
 
-# 9. BM25 Retrieval
+# 12. BM25 Retrieval
 
-BM25 使用：
+BM25：
 
 ```text
+Query
+↓
 Jieba
-+
-rank_bm25
+↓
+BM25
+↓
+Authorized Candidate Space
 ```
 
-BM25 Corpus 使用与 Dense 一致的：
+优点：
 
 ```text
-retrieval_text
+延迟极低
+词法命中清晰
+适合补充精确关键词
 ```
 
-BM25 同样执行 ACL 过滤，不允许无权限 Chunk 进入候选结果。
-
-当前没有为了 Evaluation Dataset 人工调整 BM25 参数。
-
-原因：
-
-> 直接根据当前 Evaluation Dataset 调 Retrieval 参数容易造成 Evaluation Leakage。
-
-Corpus V2 中发现 BM25 在：
+但当前存在大量：
 
 ```text
 中文 Query
-→ 英文 OWASP / FastAPI 原文
+→ 英文 Evidence
 ```
 
-场景下存在明显 lexical mismatch。
+例如：
 
-该现象会在后文 Retrieval Evaluation 中详细说明。
+```text
+最小权限
+```
+
+与：
+
+```text
+least privilege
+```
+
+在普通 lexical retrieval 中没有天然对应关系。
+
+因此出现：
+
+```text
+Cross-lingual Lexical Mismatch
+```
+
+BM25 仍作为 lexical complement 保留，但不作为主 Retriever。
 
 ---
 
-# 10. Hybrid Retrieval
+# 13. Hybrid Retrieval
 
-当前 Hybrid Retrieval：
+当前 Hybrid：
 
 ```text
-Dense Top-K
+Dense Top20
 +
-BM25 Top-K
+BM25 Top20
 ↓
-Reciprocal Rank Fusion
+RRF
+↓
+Hybrid Top20
 ```
 
 RRF：
@@ -664,54 +1049,51 @@ RRF：
 score(d) = Σ 1 / (60 + rank(d))
 ```
 
-其中：
+当前没有为了 Evaluation Dataset 人工加入：
 
 ```text
-rank 从 1 开始
-k = 60
+Dense / BM25 Weight
+Score Normalization
+特殊 Query Rule
 ```
 
-当前没有加入：
+实验发现：
+
+> **Hybrid Retrieval 并不天然优于 Dense。**
+
+RRF 知道：
 
 ```text
-Dense Score Normalization
-BM25 Score Normalization
-手工 Weight
+Candidate 在每个 Retriever 中排第几
 ```
 
-而是先使用 Rank-based Fusion，降低不同 Retrieval Score Scale 带来的直接影响。
-
-但 Corpus V2 Evaluation 表明：
-
-> Rank-based Fusion 虽然避免了直接比较 Dense Score 与 BM25 Score，但并不能自动判断某个 Retriever 在当前 Query 上是否可靠。
-
-当 BM25 在跨语言场景下发生 lexical mismatch 时：
+但不知道：
 
 ```text
-弱 BM25 排名
-+
-强 Dense 排名
-↓
-Unweighted RRF
-↓
-可能把错误候选推到 Gold 前面
+某个 Retriever 当前 Query 上是否可靠
 ```
 
 因此：
 
-> Hybrid Retrieval 并不天然优于单路 Dense Retrieval。
+```text
+Strong Dense
++
+Weak Cross-lingual BM25
+↓
+Equal-weight RRF
+↓
+Weak branch may contaminate fusion
+```
 
 ---
 
-# 11. Rerank
+# 14. Rerank
 
-Fusion 后使用：
+RRF 后使用：
 
 ```text
 BAAI/bge-reranker-v2-m3
 ```
-
-进行 Cross-Encoder Rerank。
 
 Pipeline：
 
@@ -724,57 +1106,47 @@ RRF
 ↓
 Hybrid Top20
 ↓
-bge-reranker-v2-m3
+Reranker
 ↓
 Final Top5
 ```
 
-需要注意：
+V3：
 
 ```text
-Reranker Score
+Hybrid RRF MRR        = 0.8509
+Hybrid + Rerank MRR   = 0.9259
 ```
 
-不是概率，也不能直接解释为：
+说明 Reranker 能明显修复 Fusion Noise。
+
+但：
 
 ```text
-80% 相关
+Rerank
+≠
+单调提升
 ```
 
-当前主要用于：
+尤其 R044 表明：
 
 ```text
-Ranking
-+
-Coarse Relevance Analysis
+单个 Passage 更相关
 ```
 
-Corpus V2 Evaluation 发现：
+不等于：
 
 ```text
-R021 Rank3 → Rank1
-R022 Rank3 → Rank1
-R023 Rank4 → Rank1
-R027 Rank2 → Rank1
+复合问题所需 Evidence Set 更完整
 ```
-
-说明 Reranker 能够明显修复部分 RRF Fusion Noise。
-
-但当前整体：
-
-```text
-Hybrid + Rerank
-```
-
-仍未超过 Dense baseline。
 
 因此：
 
-> Reranker 的价值需要结合真实 Failure Case 和 Quality × Latency Evaluation 判断，而不是因为架构更复杂就默认认为更好。
+> Reranker 优化 Query-Passage Relevance，但不天然保证 Evidence-Set Coverage。
 
 ---
 
-# 12. ACL Design
+# 15. ACL Design
 
 当前角色：
 
@@ -784,7 +1156,7 @@ developer
 admin
 ```
 
-权限映射：
+权限：
 
 ```text
 guest
@@ -797,46 +1169,39 @@ admin
 → public + developer + admin
 ```
 
-ACL 的核心原则：
+核心原则：
 
-> 必须在 Retrieval Candidate Generation 之前执行。
+> **ACL 必须在 Retrieval Candidate Generation 前执行。**
 
 正确链路：
 
 ```text
-User Role
+Role
 ↓
 Allowed Access Levels
 ↓
-┌─────────────────────────────┐
-│ Qdrant Payload Filter       │
-│ Authorized BM25 Candidate   │
-└─────────────────────────────┘
+Qdrant Payload Filter
++
+Authorized BM25 Corpus
 ↓
 Retrieval
 ↓
-Fusion / Rerank
+Fusion
+↓
+Rerank
 ```
 
 而不是：
 
 ```text
-Global Retrieval
+全库 Retrieval
 ↓
-Top-K
+Rerank
 ↓
-Post Filter
+最后删除 Unauthorized Chunk
 ```
 
-原因：
-
-如果先全库检索，再过滤：
-
-```text
-Unauthorized Chunk
-```
-
-已经参与：
+因为 Unauthorized Evidence 即使最终被删除，只要它先参与：
 
 ```text
 Top-K Competition
@@ -844,47 +1209,69 @@ RRF
 Rerank
 ```
 
-即使最终删除，也已经影响合法结果的排名。
-
-当前 ACL Smoke Test 已验证：
-
-```text
-guest
-查询 FastAPI 技术问题
-→ 不会检索 developer FastAPI Chunk
-
-developer
-查询 FastAPI 技术问题
-→ 能检索对应 FastAPI Chunk
-```
-
-当前 Synthetic Mixed-Access Evaluation：
-
-```text
-Unauthorized Final Results = 0
-ACL Leakage Rate = 0%
-```
-
-> 当前 FastAPI 文档被标记为 `developer` 只是项目中的企业 ACL 模拟。FastAPI 官方文档本身是公开资料。
-
-> 当前 API 中的 `role` 属于 Demo Input，并不是生产级身份认证。生产环境应由可信 SSO / JWT / IAM 生成 AccessContext。
+就已经污染合法结果排序。
 
 ---
 
-# 13. Evidence Relevance vs Answerability
+## 15.1 Same Query, Different Role
 
-开发过程中一个重要发现：
+V3：
 
 ```text
-Retrieval Relevance
-≠
-Answerability
+R042
+R045
 ```
 
-例如一个问题：
+使用完全相同 Query：
 
 ```text
-违法内容后必须在几小时内处理？
+Qdrant 中 Payload Filter
+是如何用于过滤查询结果的？
+```
+
+Developer：
+
+```text
+role = developer
+↓
+Qdrant technical chunks 可进入 Candidate Space
+↓
+Gate PASS
+↓
+Answer
+```
+
+Guest：
+
+```text
+role = guest
+↓
+Qdrant developer chunks 在 Retrieval 前被过滤
+↓
+只能检索 public candidates
+↓
+Gate REJECT
+↓
+Refuse
+```
+
+这证明：
+
+> ACL 当前真实作用于 Retrieval Candidate Space，而不是最终 Response 的字符串过滤。
+
+> 当前 API 中 `role` 仍然只是 Demo Input。生产环境应由可信 SSO / JWT / IAM 生成 AccessContext。
+
+---
+
+# 16. Retrieval Relevance ≠ Answerability
+
+这是项目中最重要的实验结论之一。
+
+例如：
+
+```text
+某法规规定发现违法内容后
+必须在几小时内处理？
 ```
 
 Retriever 可以找回：
@@ -896,7 +1283,7 @@ Retriever 可以找回：
 报告
 ```
 
-相关条款。
+高度相关条款。
 
 但 Evidence 中没有：
 
@@ -907,99 +1294,163 @@ Retriever 可以找回：
 因此：
 
 ```text
-Retrieval Relevant
+Evidence Relevant
 ```
 
-并不代表：
+不能推出：
 
 ```text
 Evidence Sufficient
 ```
 
-当前架构采用：
+系统没有采用：
 
 ```text
-Coarse Relevance Gate
+rerank_score > threshold
+=> answerable
+```
+
+而是：
+
+```text
+Rerank
 ↓
-过滤明显 Out-of-Domain Query
+Coarse Evidence Gate
 ↓
 Evidence-Constrained Generation
 ↓
-判断证据是否真正足够回答
+Final Answerability
 ```
-
-而没有采用：
-
-```text
-Top1 Rerank Score > Threshold
-=> Answerable
-```
-
-原因是实验中：
-
-```text
-Answerable
-Hard Negative
-```
-
-的 Rerank Score 存在明显重叠。
 
 ---
 
-# 14. Evidence-Constrained Generation
+# 17. Coarse Evidence Gate
 
-当前 LLM：
-
-```text
-deepseek-ai/DeepSeek-V4-Flash
-```
-
-通过：
+当前 Gate：
 
 ```text
-SiliconFlow OpenAI-compatible API
+min_top_score = -3.0
 ```
 
-调用。
+职责不是判断最终 Answerability，而是：
 
-Generation 规则：
+```text
+低成本过滤明显 Out-of-Domain
+或 ACL 后无相关 Evidence 的 Query
+```
+
+V3 Gate Audit：
+
+```text
+Answerable positives : 36
+Gate False Negative  : 0
+```
+
+但 Answerable / Unanswerable 的 rerank score 明显重叠：
+
+```text
+Lowest positive Top1 : -2.0859
+Highest negative Top1: 4.8008
+```
+
+因此：
+
+> **Rerank Score 衡量 Relevance，而不是 Answerability。**
+
+---
+
+# 18. Evidence-Constrained Generation
+
+Generation 必须：
 
 ```text
 只能使用 Evidence 中明确出现的信息
 不能使用模型外部知识补事实
-不能猜具体数字 / 时间 / 金额
-不能把模糊事实变成精确事实
-证据不足必须拒答
-只能使用真实 Evidence ID
+不能猜数字、期限、金额、比例
+不能把模糊描述变成精确事实
+Evidence 不足必须拒答
+Citation 只能引用真实 Evidence ID
 ```
 
-输出必须为结构化 JSON：
+回答结构：
 
 ```json
 {
   "answerable": true,
   "answer": "回答文本",
-  "reason": "为什么证据足够",
+  "reason": "证据为何足够",
   "citations": ["E1"]
 }
 ```
 
-或：
+拒答结构：
 
 ```json
 {
   "answerable": false,
   "answer": null,
-  "reason": "为什么证据不足",
+  "reason": "证据不足的原因",
   "citations": []
 }
 ```
 
 ---
 
-# 15. Citation Design
+# 19. Strict Structured Output
 
-LLM 返回：
+LLM Output 不被程序默认信任。
+
+Parser 会严格检查：
+
+```text
+JSON 是否合法
+answerable 是否为 bool
+answer 是否满足语义约束
+reason 是否为非空字符串
+citations 是否为数组
+Evidence ID 是否真实存在
+```
+
+LLM 偶发违反 Contract 时：
+
+```text
+Generation
+↓
+Strict Parser
+├─ PASS
+│
+└─ FAIL
+    ↓
+一次 Structured Output Retry
+    ↓
+Strict Parser
+```
+
+当前：
+
+```text
+max_parse_retries = 1
+```
+
+Retry 只处理：
+
+```text
+结构化输出协议错误
+```
+
+不会因为模型正常：
+
+```text
+Refuse
+```
+
+而强迫其重新回答。
+
+---
+
+# 20. Citation Design
+
+LLM 只能返回：
 
 ```text
 E1
@@ -1007,47 +1458,51 @@ E2
 E3
 ```
 
-只是内部 Evidence ID。
+这些内部 Evidence ID。
 
-程序不会直接把这些 ID 当最终 Citation。
-
-而是：
+程序再确定性映射：
 
 ```text
-LLM Evidence ID
+Evidence ID
 ↓
-Deterministic Mapping
+EvidenceItem
 ↓
 KnowledgeChunk
 ↓
-Article / Section
-Title
-Source URL
+chunk_id
+title
+article / section
+source_url
 ```
 
-最终 Citation 由程序验证和生成。
-
-LLM 不允许自行编造：
+模型不能自行编造：
 
 ```text
 chunk_id
-法规来源
+法规条款
 URL
-条款
+来源
 ```
+
+因此 Citation Metadata 不依赖 LLM 自由生成。
 
 ---
 
-# 16. Minimal Sufficient Evidence
+# 21. Minimal Sufficient Evidence
 
-初版 Prompt 存在 Over-Citation：
+Citation 目标不是：
 
 ```text
-主题相关
-→ 顺手全部引用
+越多越安全
 ```
 
-当前 Prompt v2 使用：
+也不是：
+
+```text
+越少越好
+```
+
+而是：
 
 ```text
 Minimal Sufficient Evidence Set
@@ -1056,142 +1511,66 @@ Minimal Sufficient Evidence Set
 原则：
 
 ```text
-只引用直接支持最终答案实际陈述的 Evidence
+只引用实际支持最终陈述的 Evidence
 
 主题相关
 ≠
-需要引用
+必须引用
 
-同一个事实已经有充分 Evidence
-→ 不重复添加类似 Evidence
+同一个事实已有充分证据
+→ 不重复堆 Citation
 
-多个独立义务分别由不同 Evidence 支撑
-→ 保留所有必要 Evidence
-
-用户明确限定法规 / 制度 / 场景
-→ 优先引用同范围 Evidence
+多个独立事实由不同证据支撑
+→ 保留多个必要 Citation
 ```
 
-目标不是：
+当前仍观察到一定：
 
 ```text
-Citation 越少越好
+Over-Citation
 ```
 
-而是：
-
-```text
-完整支持答案的最小充分证据集合
-```
+因此 Citation Selection 仍是一个明确 limitation。
 
 ---
 
-# 17. FastAPI
+# 22. Evaluation Design
 
-当前 API：
+当前 Evaluation 不只看：
 
 ```text
-GET /health
-
-GET /ready
-
-POST /api/v1/retrieve
-
-POST /api/v1/ask
+最终答案是否看起来正确
 ```
 
-其中：
+而是分别评估：
 
 ```text
-/retrieve
-```
-
-只返回 Retrieval / Rerank 结果，不调用 LLM。
-
-```text
-/ask
-```
-
-执行完整：
-
-```text
-Retrieval
-↓
-Rerank
-↓
-Gate
-↓
-Generation / Refusal
-↓
-Citation
-```
-
----
-
-# 18. Runtime
-
-Heavy Runtime 在 FastAPI Lifespan 中初始化一次。
-
-避免：
-
-```text
-每个 HTTP Request
-↓
-重新加载 BGE-M3
-↓
-重新加载 Reranker
-```
-
-当前 Runtime 包括：
-
-```text
-Chunks
-Embedding Service
-Dense Retriever
-BM25 Retriever
-Hybrid Retriever
-Reranker
+Manifest Coverage
+Chunk Validation
+Gold Integrity
+Role-aware Retrieval
+Dense / BM25 / Hybrid / Rerank
+Latency
 Evidence Gate
-LLM Service
-Grounded Answerer
-Query Service
+Answer / Refusal
+Citation
+Regression
 ```
 
----
-
-# 19. Evaluation Architecture
-
-当前项目已经建立一套可重复的 Evaluation Pipeline：
+Dataset：
 
 ```text
-Evaluation Dataset
-↓
-Gold Integrity Check
-↓
-Role-aware Retrieval Evaluation
-↓
-Retrieval Quality
-↓
-Pairwise Ablation Analysis
-↓
-Per-Method Failure Inspector
-↓
-Latency Benchmark
-↓
-Answer / Refusal Eval
-↓
-Citation Eval
-↓
-Raw Snapshot Persistence
-↓
-Offline Analysis
-↓
-Gold Audit
-↓
-Prompt Regression
+V1
+→ Frozen Seed Regression Benchmark
+
+V2
+→ Intermediate Capability Benchmark
+
+V3
+→ Final Capability Benchmark
 ```
 
-完整实验记录见：
+完整实验过程见：
 
 ```text
 docs/evaluation.md
@@ -1199,652 +1578,60 @@ docs/evaluation.md
 
 ---
 
-# 20. Evaluation Dataset Versioning
+# 23. Final Retrieval Evaluation · V3
 
-当前不再只有一个 Evaluation Dataset。
-
-而是明确区分：
+V3：
 
 ```text
-Retrieval Eval V1
-+
-Retrieval Eval V2
+46 total cases
+36 answerable
+10 unanswerable
 ```
 
----
-
-## Retrieval Eval V1
-
-路径：
-
-```text
-data/eval/retrieval_eval_v1.jsonl
-```
-
-规模：
-
-```text
-20 cases
-
-Answerable   : 14
-Unanswerable : 6
-```
-
-作用：
-
-```text
-Frozen Regression Benchmark
-```
-
-即：
-
-> Corpus 扩展、Metadata Schema 升级、ACL Evaluation 升级之后，验证旧能力是否发生回归。
-
-V1 Dataset 已冻结，不因为新的 Corpus 或 Retriever 输出修改 Gold。
-
----
-
-## Retrieval Eval V2
-
-路径：
-
-```text
-data/eval/retrieval_eval_v2.jsonl
-```
-
-规模：
-
-```text
-34 cases
-
-Answerable   : 26
-Unanswerable : 8
-```
-
-Role Distribution：
-
-```text
-guest       : 27
-developer   : 7
-```
-
-Category Distribution：
-
-```text
-direct          : 14
-paraphrase      : 8
-short           : 3
-ambiguous       : 1
-hard_negative   : 6
-out_of_domain   : 2
-```
-
-V2 在 V1 基础上新增：
-
-```text
-OWASP Prompt Injection
-FastAPI Dependencies
-FastAPI Lifespan
-developer-role Retrieval
-new Hard Negatives
-```
-
----
-
-# 21. Role-aware Retrieval Evaluation
-
-`RetrievalEvalCase` 当前包含：
-
-```text
-role
-```
-
-因此一条 Evaluation Case 不再只有：
-
-```text
-query
-→ gold
-```
-
-而是：
-
-```text
-query
-+
-role
-↓
-authorized candidate space
-↓
-gold
-```
-
-V1 历史 Dataset 没有显式 `role` 字段。
-
-由于旧 Runner 当时默认：
-
-```text
-guest
-```
-
-因此新 Loader 对缺失 role 的 V1 Case 仍然保持：
-
-```text
-guest
-```
-
-从而避免 Schema Evolution 偷偷改变历史 benchmark 语义。
-
-V2 中则显式保存：
-
-```json
-"role": "guest"
-```
-
-或：
-
-```json
-"role": "developer"
-```
-
----
-
-# 22. Retrieval Gold Integrity
-
-在执行 Retrieval Evaluation 前，会检查所有：
-
-```text
-gold_chunk_ids
-citation_gold_chunk_ids
-```
-
-是否真实存在于当前：
-
-```text
-data/processed/chunks.jsonl
-```
-
-Corpus V2 当前结果：
-
-```text
-Missing Retrieval Gold = 0
-Missing Citation Gold = 0
-```
-
-这可以防止：
-
-```text
-Chunk ID Schema Evolution
-手工 Gold 拼写错误
-旧 Chunk ID 漂移
-```
-
-导致假的 Recall Failure。
-
----
-
-# 23. Frozen V1 Retrieval Regression
-
-Corpus 从：
-
-```text
-49 regulation chunks
-```
-
-扩展为：
-
-```text
-104 heterogeneous chunks
-```
-
-后，使用冻结的 Retrieval Eval V1 重新测试。
-
-结果：
+Retrieval Metrics 只统计 Answerable Query。
 
 | Method | Recall@1 | Recall@3 | Recall@5 | Recall@10 | MRR@10 |
 |---|---:|---:|---:|---:|---:|
-| Dense | 0.9643 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| BM25 | 0.8214 | 1.0000 | 1.0000 | 1.0000 | 0.9286 |
-| Hybrid RRF | 0.9643 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| Hybrid + Rerank | 0.9643 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| Dense | 0.8472 | 0.9722 | 1.0000 | 1.0000 | 0.9130 |
+| BM25 | 0.5139 | 0.6528 | 0.7083 | 0.7778 | 0.6051 |
+| Hybrid RRF | 0.7639 | 0.9028 | 0.9444 | 1.0000 | 0.8509 |
+| Hybrid + Rerank | 0.8472 | 0.9861 | 0.9861 | 1.0000 | 0.9259 |
 
-与 Corpus V1 相比：
+主要观察：
 
 ```text
 Dense
-→ 保持不变
+→ 最稳定的基础召回
 
 BM25
-→ Recall@1 / MRR 提升
+→ 跨语言场景明显较弱
 
 Hybrid RRF
-→ Recall@1 / MRR 提升
+→ 不一定优于 Dense
 
-Hybrid + Rerank
-→ 保持不变
+Rerank
+→ 能修复大量 Fusion Noise
+→ 但不是单调提升
 ```
-
-因此：
-
-> Corpus V2 扩展后，在冻结的旧任务上没有观察到 Retrieval Quality Regression。
-
-需要注意：
-
-> 当前 V1 Dataset 仍然只有 14 条 Answerable Query，因此该结果属于 preliminary regression evidence，而不是最终算法结论。
 
 ---
 
-# 24. Corpus V2 Retrieval Quality
+# 24. Retrieval Latency
 
-当前 Retrieval Eval V2：
-
-```text
-34 cases
-26 answerable
-```
-
-结果：
-
-| Method | Recall@1 | Recall@3 | Recall@5 | Recall@10 | MRR@10 |
-|---|---:|---:|---:|---:|---:|
-| Dense | 0.9808 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| BM25 | 0.5577 | 0.7308 | 0.7692 | 0.7692 | 0.6551 |
-| Hybrid RRF | 0.8269 | 0.9615 | 1.0000 | 1.0000 | 0.9006 |
-| Hybrid + Rerank | 0.9423 | 1.0000 | 1.0000 | 1.0000 | 0.9808 |
-
-当前质量排序：
-
-```text
-Dense
->
-Hybrid + Rerank
->
-Hybrid RRF
->
-BM25
-```
-
-需要强调：
-
-```text
-Recall@1 = 0.9808
-```
-
-并不表示 Dense 存在普通的 Rank1 Failure。
-
-原因是 Dataset 中存在 multi-gold Query。
-
-General Failure Inspector 结果：
-
-```text
-Dense Non-Top1 Gold Cases
-→ No cases
-```
-
-即：
-
-> 26 条 Answerable Query 中，每条 Query 至少有一个核心 Retrieval Gold 位于 Dense Rank1。
-
----
-
-# 25. Cross-Lingual Dense Retrieval
-
-Corpus V2 新增了英文：
-
-```text
-OWASP
-FastAPI
-```
-
-而 Evaluation Query 主要仍然使用中文。
-
-例如：
-
-```text
-提示词注入 最小权限
-```
-
-Gold：
-
-```text
-Enforce privilege control
-and least privilege access
-```
-
-Dense 能够稳定完成：
-
-```text
-中文 Query
-↓
-BGE-M3
-↓
-英文 Evidence
-```
-
-的跨语言语义匹配。
-
-因此当前实验支持：
-
-> BGE-M3 对该中英混合知识库具有较强的跨语言 Dense Retrieval 能力。
-
----
-
-# 26. BM25 Cross-Lingual Failure
-
-Corpus V2 中：
-
-```text
-BM25 Recall@10 = 0.7692
-```
-
-General Failure Inspector 找到 6 条：
-
-```text
-Top10 中完全没有任何 Gold
-```
-
-的 Query：
-
-```text
-R021
-OWASP 所说的直接提示词注入是什么？
-
-R022
-LLM 从网页或文件读取到隐藏恶意指令并因此改变行为，属于什么风险？
-
-R023
-提示词注入 最小权限
-
-R024
-OWASP 对模型执行高风险或高权限操作有什么人工控制建议？
-
-R025
-如何通过渗透测试和攻击模拟来降低提示词注入风险？
-
-R030
-FastAPI 应用启动时加载共享机器学习模型，并在关闭时释放资源，推荐怎么做？
-```
-
-这些 Query 的共同特点是：
-
-```text
-中文 Query
-→ 英文 OWASP / FastAPI 文档
-```
-
-普通 BM25 主要依赖 lexical overlap。
-
-因此：
-
-```text
-最小权限
-```
-
-并不会自然等价于：
-
-```text
-least privilege
-```
-
-这形成：
-
-```text
-Cross-lingual Lexical Mismatch
-```
-
-因此：
-
-> BM25 在当前 Corpus V2 中仍具有低成本词法检索价值，但不适合作为中英混合知识库的主 Retriever。
-
----
-
-# 27. Hybrid RRF Failure Analysis
-
-Corpus V2 中发现 4 个：
-
-```text
-Dense
-→
-Hybrid RRF
-```
-
-排名退化 Case：
-
-```text
-R021
-R022
-R023
-R027
-```
-
-其中：
-
-```text
-R021
-Dense Gold Rank1
-→ Hybrid Rank3
-
-R022
-Dense Gold Rank1
-→ Hybrid Rank3
-
-R023
-Dense Gold Rank1
-→ Hybrid Rank4
-
-R027
-Dense Gold Rank1
-→ Hybrid Rank2
-```
-
-前三个 OWASP Case 与 BM25 的跨语言 lexical mismatch 高度重合。
-
-原因：
-
-RRF 使用：
-
-```text
-Rank
-```
-
-进行融合。
-
-它不会知道：
-
-```text
-当前 BM25 Rank1 是否真的可靠
-```
-
-因此可能出现：
-
-```text
-Strong Dense
-+
-Weak BM25
-↓
-Unweighted RRF
-↓
-Weak Retriever Contaminates Fusion
-```
-
-所以当前实验进一步确认：
-
-> Hybrid Retrieval 并不天然优于 Dense。融合效果依赖 Corpus、语言分布以及各子 Retriever 在当前 Query 上的可靠性。
-
----
-
-# 28. Reranker Failure Recovery
-
-Corpus V2 中：
-
-```text
-Hybrid RRF
-→
-bge-reranker
-```
-
-成功修复：
-
-```text
-R021
-Rank3 → Rank1
-
-R022
-Rank3 → Rank1
-
-R023
-Rank4 → Rank1
-
-R027
-Rank2 → Rank1
-```
-
-说明 Cross-Encoder 能进一步结合：
-
-```text
-Query
-+
-Candidate Content
-```
-
-判断细粒度相关性，从而修复部分 RRF Fusion Noise。
-
-但是总体：
-
-```text
-Hybrid + Rerank
-Recall@1 = 0.9423
-
-Dense
-Recall@1 = 0.9808
-```
-
-当前 Hybrid + Rerank 仍未超过 Dense baseline。
-
-因此当前结论是：
-
-> Reranker 在复杂异构 Corpus 上具有明确的 Ranking Repair 价值，但不能因为增加了 Reranker 就默认认为整体效果一定优于 Dense。
-
----
-
-# 29. Remaining Reranker Failure
-
-当前：
-
-```text
-Hybrid + Rerank Non-Top1 Gold Cases
-```
-
-只有一个：
-
-```text
-R030
-```
-
-Query：
-
-```text
-FastAPI 应用启动时加载共享机器学习模型，
-并在关闭时释放资源，推荐怎么做？
-```
-
-Gold：
-
-```text
-FastAPI Lifespan
-> Lifespan
-```
-
-Reranker：
-
-```text
-Rank1
-Alternative Events (deprecated)
-> startup and shutdown together
-
-Rank2
-Lifespan
-```
-
-这里 Rank1 并非完全无关。
-
-它讨论：
-
-```text
-startup / shutdown
-resource acquire / release
-recommended lifespan
-```
-
-而 Gold Section 更直接给出了：
-
-```text
-lifespan parameter
-@asynccontextmanager
-yield 前加载
-yield 后清理
-```
-
-因此该 Case 更接近：
-
-```text
-高度相关 Supporting Section
-vs
-更精确的 Minimal Core Evidence
-```
-
-属于细粒度 Section Ranking Failure。
-
-当前没有为了这一条 Case：
-
-```text
-修改 Gold
-调整 RRF
-调整 TopK
-修改 Query
-```
-
-以避免 Evaluation Overfitting。
-
----
-
-# 30. Retrieval Latency
-
-正式 Retrieval Latency Benchmark 使用：
+正式 Latency 使用：
 
 ```text
 Query-level Interleaved Benchmark
 ```
 
-而不是按：
-
-```text
-Method Block
-```
-
-顺序执行。
-
-原因：
-
-早期 Blocked Benchmark 观察到明显：
+减少：
 
 ```text
 GPU Warm-State
 Method Order Bias
 ```
 
-因此正式实验采用：
-
-```text
-对每个 Query
-↓
-随机四种 Method 执行顺序
-↓
-Repeated Runs
-↓
-P50 / P95
-```
-
-正式 Benchmark 条件：
+实验条件：
 
 ```text
 Queries        : 20
@@ -1854,16 +1641,14 @@ Warmup         : 2
 GPU            : RTX 4060 Laptop
 ```
 
-结果：
+| Method | Mean | P50 | P95 |
+|---|---:|---:|---:|
+| BM25 | 0.39 ms | 0.32 ms | 0.52 ms |
+| Dense | 53.57 ms | 52.20 ms | 75.44 ms |
+| Hybrid RRF | 56.54 ms | 54.71 ms | 77.51 ms |
+| Hybrid + Rerank | 452.33 ms | 455.68 ms | 503.99 ms |
 
-| Method | Mean | P50 | P95 | Min | Max |
-|---|---:|---:|---:|---:|---:|
-| BM25 | 0.39 ms | 0.32 ms | 0.52 ms | 0.09 ms | 6.09 ms |
-| Dense | 53.57 ms | 52.20 ms | 75.44 ms | 30.35 ms | 98.18 ms |
-| Hybrid RRF | 56.54 ms | 54.71 ms | 77.51 ms | 33.48 ms | 106.12 ms |
-| Hybrid + Rerank | 452.33 ms | 455.68 ms | 503.99 ms | 348.80 ms | 538.37 ms |
-
-当前关系：
+关系：
 
 ```text
 BM25
@@ -1875,321 +1660,652 @@ Hybrid RRF
 Hybrid + Rerank
 ```
 
-Reranker 是当前 Retrieval Pipeline 中最主要的额外延迟来源。
+因此：
 
-> 该正式 Benchmark 来自此前冻结的 Query-level Interleaved Latency Experiment。Corpus V2 Ablation Summary 中附带的单次 Mean Latency 仅用于诊断，不用于覆盖这组正式 latency 结论。
-
-> Benchmark 不包含模型初始化、FastAPI、HTTP 和 LLM Generation。
+> Reranker 是否值得始终开启，需要结合 Quality × Latency Evaluation，而不是只看排序指标。
 
 ---
 
-# 31. Answer / Refusal Evaluation
+# 25. Final Full-RAG Evaluation · V3 run_003
 
-当前 Full-RAG Answer / Refusal Evaluation 仍基于：
-
-```text
-Retrieval Eval V1 对应的 20 条 Seed Cases
-```
-
-尚未在最新 Retrieval Eval V2 的 34 条 Case 上重新执行完整 LLM Evaluation。
-
-Prompt v2 当前结果：
+最终有效 Full-RAG Benchmark：
 
 ```text
-20 cases
+Cases        : 46
+Answerable   : 36
+Unanswerable : 10
 ```
 
 | Metric | Result |
 |---|---:|
-| TP | 14 |
-| TN | 6 |
+| TP | 35 |
+| TN | 10 |
 | FP | 0 |
-| FN | 0 |
-| Overall Decision Accuracy | 1.0000 |
-| Answerable Accuracy | 1.0000 |
-| Refusal Accuracy | 1.0000 |
-| Hard Negative Refusal Accuracy | 1.0000 |
-| OOD Refusal Accuracy | 1.0000 |
+| FN | 1 |
+| Overall Decision Accuracy | **97.83%** |
+| Answerable Accuracy | **97.22%** |
+| Refusal Accuracy | **100.00%** |
+| Hard Negative Refusal Accuracy | **100.00%** |
+| OOD Refusal Accuracy | **100.00%** |
 
-当前 Seed Dataset：
+关键结果：
 
 ```text
-Decision Failure = 0
+10 / 10 Unanswerable
+全部正确拒答
+
+False Positive = 0
 ```
 
-但需要强调：
-
-> 当前结果只代表该 Seed Dataset 的一次 Full-RAG Evaluation，不代表生产环境准确率为 100%。
+> 结果只代表当前冻结 V3 Benchmark，不代表生产环境准确率或 SLA。
 
 ---
 
-# 32. Citation Gold Audit
+# 26. Citation Evaluation · V3
 
-初版 Citation Evaluation 直接使用：
+All-case：
 
 ```text
-Retrieval Gold
+Precision : 0.8629
+Recall    : 0.9690
+Hit Rate  : 1.0000
 ```
 
-后来 Failure Analysis 发现：
+Strict Citation：
 
 ```text
-Retrieval Gold
-≠
-Citation Gold
+Precision : 0.8944
+Recall    : 0.9917
+Hit Rate  : 1.0000
 ```
 
-因此当前 Dataset 拆分：
+主要 Failure Pattern：
 
 ```text
-gold_chunk_ids
-→ Retrieval Evaluation
-
-citation_gold_chunk_ids
-→ Citation Evaluation
-```
-
-另外增加：
-
-```text
-strict_citation_eval
-```
-
-用于排除：
-
-```text
-ambiguous
-multiple acceptable source
-```
-
-等不适合严格 Citation Precision 的 Query。
-
-一个重要原则是：
-
-> Gold 不能根据当前 Retriever 或 LLM 的输出反向生成。
-
-Citation Gold 必须经过独立 Corpus / Source Audit。
-
----
-
-# 33. Prompt v1 → Prompt v2
-
-Prompt v1 Citation：
-
-| Metric | v1 |
-|---|---:|
-| Citation Precision | 0.9524 |
-| Citation Recall | 0.9821 |
-| Strict Citation Precision | 0.9444 |
-| Strict Citation Recall | 0.9792 |
-
-主要 Failure：
-
-```text
-R001
-生成式人工智能服务处理训练数据需要遵守什么规定？
-```
-
-Prompt v1 引用了：
-
-```text
-核心第七条
+正确核心证据
 +
-相关第四条
-+
-其他法规第十四条
+额外 supporting evidence
 ```
 
-形成 Over-Citation。
-
-Prompt v2 加入：
+因此当前问题更偏向：
 
 ```text
-Minimal Sufficient Evidence
-+
-Scope Matching
+Over-Citation
 ```
 
-完整 Re-evaluation：
-
-| Metric | Prompt v1 | Prompt v2 |
-|---|---:|---:|
-| Decision Accuracy | 1.0000 | 1.0000 |
-| Refusal Accuracy | 1.0000 | 1.0000 |
-| Citation Precision | 0.9524 | 1.0000 |
-| Citation Recall | 0.9821 | 0.9643 |
-| Strict Citation Precision | 0.9444 | 1.0000 |
-| Strict Citation Recall | 0.9792 | 1.0000 |
-| Strict Citation Hit Rate | 1.0000 | 1.0000 |
-
-Prompt v2：
-
-```text
-Strict Citation Mismatch = 0
-
-Decision Regression = 0
-
-Evidence-ID Leak = 0
-```
-
-因此当前接受 Prompt v2。
-
-All-case Citation Recall 的下降主要来自一个：
-
-```text
-strict_citation_eval = false
-```
-
-的 ambiguous Case。
-
-详见：
-
-```text
-docs/evaluation.md
-```
+而不是完全引用错误。
 
 ---
 
-# 34. Evaluation Snapshot
+# 27. R044 Failure Case
 
-真实 LLM Evaluation 会受到：
-
-```text
-API Cost
-Network Latency
-Generation Randomness
-```
-
-影响。
-
-因此项目不会在每次 Failure Analysis 时重新调用 LLM。
-
-当前：
+最终唯一 Answerable FN：
 
 ```text
-Expensive Full-RAG Run
-↓
-Immutable JSONL Snapshot
-↓
-Offline Metrics
-↓
-Failure Analysis
-↓
-Gold Audit
-↓
-Prompt Comparison
+R044
 ```
 
-当前代表性 Snapshot：
+Query：
 
 ```text
-data/eval/results/
-├── answer_eval_v1_run_001.jsonl
-├── answer_eval_v1_run_001_audited.jsonl
-└── answer_eval_v1_run_002.jsonl
+Qdrant Hybrid Queries 支持哪些融合方式，
+RRF 的作用是什么？
 ```
 
-含义：
+Gate：
 
 ```text
-run_001
-→ Prompt v1 原始输出
-
-run_001_audited
-→ Prompt v1 + 最新 Citation Annotation
-
-run_002
-→ Prompt v2 Full-RAG Result
+PASS
 ```
 
-这种设计实现：
+说明最终候选高度相关。
+
+但 Top-K 更集中于：
 
 ```text
-Expensive Inference Once
-↓
-Offline Analysis Many Times
+RRF 定义
+RRF 公式
+RRF 作用
 ```
+
+没有完整覆盖：
+
+```text
+支持哪些融合方式
++
+RRF 的作用
+```
+
+两部分。
+
+因此系统最终：
+
+```text
+Refuse
+```
+
+而不是调用模型外部知识补齐。
+
+这形成：
+
+> **Single-Passage Relevance ≠ Evidence-Set Coverage**
+
+当前没有为了把：
+
+```text
+35 / 36
+```
+
+调成：
+
+```text
+36 / 36
+```
+
+而修改冻结 V3 Gold、RRF、TopK、Reranker 或 Prompt。
 
 ---
 
-# 35. Failure Analysis
+# 28. Evaluation Infrastructure Failures
 
-当前 Retrieval Evaluation 不只输出 Aggregate Metrics。
+V3 Full-RAG 曾经历三次实验。
 
-还支持：
+## run_001
 
 ```text
-Dense → Hybrid Rank Degradation
-
-Hybrid → Rerank Rank Improvement
-
-Dense Non-Top1 Gold Cases
-
-BM25 Gold Misses @10
-
-Hybrid RRF Non-Top1 Gold Cases
-
-Hybrid + Rerank Non-Top1 Gold Cases
+INVALID
 ```
 
-这使 Retrieval Optimization 不再停留在：
+原因：
 
 ```text
-Recall 下降了
+Evaluation Runner
+错误地把所有 Case
+统一按 guest 执行
 ```
 
-而是可以定位到：
+Dataset 虽然保存：
 
 ```text
-哪个 Query
-↓
-哪个 Gold
-↓
-在哪个 Method
-↓
-掉到了第几名
-↓
-前面出现了什么错误候选
+role
 ```
 
-当前 Evaluation 原则：
+但 Harness 没有真正使用：
 
 ```text
-Measure
-↓
-Inspect
-↓
-Explain
-↓
-Then Tune
+case.role
+```
+
+修复后增加：
+
+```text
+guest case     → guest
+developer case → developer
+```
+
+Regression Test。
+
+---
+
+## run_002
+
+```text
+ABORTED
+```
+
+原因：
+
+```text
+R032 structured output
+reason 字段违反 Parser Contract
+```
+
+这里属于：
+
+```text
+Output Contract Failure
 ```
 
 而不是：
 
 ```text
-指标不好
-↓
-改参数
-↓
-直到测试集好看
+Business Refusal
+```
+
+因此没有把它伪装成：
+
+```text
+answerable = false
+```
+
+修复：
+
+```text
+Strict Parser
++
+Bounded Structured-output Retry
 ```
 
 ---
 
-# 36. Reproduction
+## run_003
 
-## Install
+```text
+VALID FINAL
+```
 
-创建 Python 3.11 虚拟环境后：
+包括：
+
+```text
+Role-aware Evaluation
+Strict Structured Output
+Bounded Retry
+Case-level Checkpoint
+Resume Safety Validation
+Final Snapshot
+```
+
+---
+
+# 29. Evaluation Checkpoint / Resume
+
+Full-RAG Evaluation 会真实调用外部 LLM。
+
+原始实现：
+
+```text
+46 Cases 全完成
+↓
+才保存结果
+```
+
+意味着中途失败时，前面已经完成的昂贵推理无法恢复。
+
+当前改为：
+
+```text
+每完成一个 Case
+↓
+立即保存 Partial Snapshot
+```
+
+中断后：
+
+```powershell
+python scripts/run_answer_eval.py `
+    --dataset v3 `
+    --run-id <RUN_ID> `
+    --resume
+```
+
+Resume 会验证 Partial Snapshot 是否为：
+
+```text
+当前冻结 Dataset 的连续前缀
+```
+
+防止：
+
+```text
+乱序
+缺洞
+Dataset 漂移
+重复 LLM 调用
+```
+
+全部完成后：
+
+```text
+Partial Snapshot
+↓
+Completeness Validation
+↓
+Final Snapshot
+↓
+删除 Partial
+```
+
+---
+
+# 30. API
+
+当前接口：
+
+```text
+GET  /health
+GET  /ready
+POST /api/v1/retrieve
+POST /api/v1/ask
+```
+
+`/retrieve`：
+
+```text
+ACL-aware Retrieval
++
+Fusion
++
+Rerank
+```
+
+不调用 LLM。
+
+`/ask`：
+
+```text
+Retrieval
+↓
+Rerank
+↓
+Evidence Gate
+↓
+Generation / Refusal
+↓
+Citation
+```
+
+API Response Schema 同时兼容：
+
+```text
+Regulation
+→ article_number = "第X条"
+
+Technical Documentation
+→ article_number = null
+```
+
+该 Contract 已通过专门的 HTTP Regression Test 锁定，避免技术文档再次因为 Response Schema nullability 不一致导致 HTTP 500。
+
+---
+
+# 31. Example QA Showcase
+
+这里选取四类 Case 展示系统能力边界。
+
+---
+
+## 31.1 Grounded Answer
+
+Query：
+
+```text
+FastAPI 挂载的子应用会自动执行主应用的 lifespan 事件吗？
+```
+
+Role：
+
+```text
+developer
+```
+
+实际链路：
+
+```text
+Developer ACL
+↓
+FastAPI Lifespan Evidence
+↓
+Gate PASS
+↓
+Evidence Sufficient
+↓
+Answer
+```
+
+实际验证结果：
+
+```text
+不会。
+
+FastAPI 的 lifespan 事件只会为主应用执行，
+不会在挂载的 Sub Applications（Mounts）中自动执行。
+```
+
+对应 Citation：
+
+```text
+fastapi_lifespan__lifespan_events_sub_applications__0001
+```
+
+该 Case 展示：
+
+```text
+有直接 Evidence
+→ Grounded Answer
+→ Citation 可追溯
+```
+
+---
+
+## 31.2 Unsupported Fact → Refusal
+
+Query：
+
+```text
+生成式人工智能服务管理暂行办法规定，
+发现违法内容后必须在几小时内处理？
+```
+
+Retriever 可以找到：
+
+```text
+违法内容
+及时处理
+整改
+报告
+```
+
+相关 Evidence。
+
+但是没有：
+
+```text
+明确小时数
+```
+
+因此系统不能猜：
+
+```text
+24 小时
+48 小时
+72 小时
+```
+
+而应明确说明当前证据没有提供具体小时数。
+
+该 Case 展示：
+
+> **有相关 Evidence ≠ 有足够 Evidence。**
+
+---
+
+## 31.3 Same Query, Different Role
+
+Query：
+
+```text
+Qdrant 中 Payload Filter
+是如何用于过滤查询结果的？
+```
+
+### Developer
+
+```text
+role = developer
+↓
+Qdrant technical chunks 可访问
+↓
+Relevant Evidence Retrieved
+↓
+Gate PASS
+↓
+Answer
+```
+
+### Guest
+
+```text
+role = guest
+↓
+Qdrant developer chunks
+在 Candidate Generation 前被过滤
+↓
+无法获得对应技术 Evidence
+↓
+Gate REJECT
+↓
+Refuse
+```
+
+因此：
+
+```text
+Same Query
++
+Different Role
+↓
+Different Candidate Space
+↓
+Different Valid Response
+```
+
+该 Case 展示：
+
+> ACL 发生在 Retrieval 前，而不是生成后过滤答案。
+
+---
+
+## 31.4 Relevant But Incomplete Evidence
+
+Query：
+
+```text
+Qdrant Hybrid Queries 支持哪些融合方式，
+RRF 的作用是什么？
+```
+
+Role：
+
+```text
+developer
+```
+
+系统找到了大量：
+
+```text
+RRF
+Hybrid Search
+Fusion
+```
+
+相关 Evidence。
+
+Gate：
+
+```text
+PASS
+```
+
+但最终 Evidence 只足以充分解释：
+
+```text
+RRF 的作用
+```
+
+不足以完整回答：
+
+```text
+支持哪些融合方式
+```
+
+因此系统选择：
+
+```text
+Refuse
+```
+
+而不是让模型利用外部知识补齐。
+
+该 Case 展示：
+
+```text
+Single-Passage Relevance
+≠
+Evidence-Set Coverage
+```
+
+也是当前系统明确保留的 Failure，而不是为了 Benchmark 100% 对测试集调参。
+
+---
+
+# 32. Reproduction
+
+## 32.1 Install
+
+要求：
+
+```text
+Python >= 3.11,<3.12
+```
+
+安装核心 Backend：
 
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
+安装开发 / 测试依赖：
+
+```powershell
+python -m pip install -e ".[dev]"
+```
+
+安装 Streamlit Demo：
+
+```powershell
+python -m pip install -e ".[demo]"
+```
+
+开发 + Demo：
+
+```powershell
+python -m pip install -e ".[dev,demo]"
+```
+
 ---
 
-## Start Qdrant
+## 32.2 Environment Variables
+
+根据：
+
+```text
+.env.example
+```
+
+创建本地：
+
+```text
+.env
+```
+
+至少配置：
+
+```text
+SILICONFLOW_API_KEY
+```
+
+可选：
+
+```text
+LLM_MODEL
+```
+
+真实 API Key 不应提交到 Git。
+
+---
+
+## 32.3 Start Qdrant
 
 ```powershell
 docker compose up -d
@@ -2201,7 +2317,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Qdrant Dashboard：
+Dashboard：
 
 ```text
 http://localhost:6333/dashboard
@@ -2209,41 +2325,25 @@ http://localhost:6333/dashboard
 
 ---
 
-## Build Chunks
+## 32.4 Build Corpus
 
 ```powershell
 python scripts/build_chunks.py
 ```
 
-当前 Corpus V2 预期：
+当前预期：
 
 ```text
-104 chunks
+Documents = 28
+Chunks    = 835
+
+Manifest → Corpus Coverage = PASS
+Chunk Validation           = PASS
 ```
 
 ---
 
-## Inspect Corpus
-
-```powershell
-python scripts/inspect_corpus.py
-```
-
-用于检查：
-
-```text
-Document Distribution
-Document Type Distribution
-ACL Distribution
-Chunk Length
-Duplicate Content
-Long Chunk
-Multi-part Section
-```
-
----
-
-## Build Vector Index
+## 32.5 Build Vector Index
 
 ```powershell
 python scripts/build_vector_index.py
@@ -2252,206 +2352,183 @@ python scripts/build_vector_index.py
 当前预期：
 
 ```text
-Embedding Shape
-→ (104, 1024)
-
-Qdrant Point Count
-→ 104
+Embedding Dimension = 1024
+Qdrant Point Count  = 835
 ```
 
 ---
 
-## Run Frozen Retrieval Regression V1
+## 32.6 Retrieval Evaluation V1
 
 ```powershell
 python scripts/run_retrieval_eval.py --dataset v1
 ```
 
-用于验证：
+用途：
 
 ```text
-Corpus / Schema / Retrieval 改动
-是否破坏旧能力
+Frozen Regression Benchmark
 ```
 
 ---
 
-## Run Retrieval Capability Evaluation V2
+## 32.7 Retrieval Evaluation V2
 
 ```powershell
 python scripts/run_retrieval_eval.py --dataset v2
 ```
 
-用于评估当前 Corpus V2：
+用途：
 
 ```text
-Dense
-BM25
-Hybrid RRF
-Hybrid + Rerank
+Intermediate Capability Benchmark
 ```
-
-以及 Failure Analysis。
 
 ---
 
-## Run Final Retrieval Latency Benchmark
+## 32.8 Retrieval Evaluation V3
+
+```powershell
+python scripts/run_retrieval_eval.py --dataset v3
+```
+
+用途：
+
+```text
+Final Retrieval Capability Benchmark
+```
+
+---
+
+## 32.9 Evidence Gate Audit
+
+```powershell
+python scripts/audit_evidence_gate_scores.py
+```
+
+只执行：
+
+```text
+Retrieval
+Rerank
+Gate
+```
+
+不调用 SiliconFlow LLM。
+
+---
+
+## 32.10 Full-RAG Evaluation
+
+使用新的 Run ID：
+
+```powershell
+python scripts/run_answer_eval.py `
+    --dataset v3 `
+    --run-id <NEW_RUN_ID>
+```
+
+如果中途中断：
+
+```powershell
+python scripts/run_answer_eval.py `
+    --dataset v3 `
+    --run-id <SAME_RUN_ID> `
+    --resume
+```
+
+> 当前 `run_003` 已作为 V3 Final Snapshot 冻结，不应覆盖。
+
+---
+
+## 32.11 Retrieval Latency Benchmark
 
 ```powershell
 python scripts/run_interleaved_retrieval_latency_benchmark.py
 ```
 
-正式 Latency 采用：
+---
 
-```text
-Query-level Interleaved Benchmark
+## 32.12 Run Tests
+
+```powershell
+pytest -v
 ```
 
 ---
 
-## Inspect Evaluation Dataset
+# 33. Run Backend and Demo
+
+需要两个终端。
+
+## 33.1 Start FastAPI
 
 ```powershell
-python scripts/inspect_retrieval_eval_dataset.py
+uvicorn enterprise_rag.api.app:create_app --factory
 ```
 
----
-
-## Run Full-RAG Evaluation
-
-需要：
-
-```text
-Qdrant
-BGE-M3
-bge-reranker-v2-m3
-SILICONFLOW_API_KEY
-```
-
-运行：
-
-```powershell
-python scripts/run_answer_eval.py
-```
-
----
-
-## Offline Snapshot Analysis
-
-```powershell
-python scripts/analyze_answer_eval_snapshot.py
-```
-
----
-
-## Prompt v1 / v2 Comparison
-
-```powershell
-python scripts/compare_answer_eval_snapshots.py
-```
-
-Offline Comparison 不调用 LLM。
-
----
-
-# 37. FastAPI Run
-
-启动：
-
-```powershell
-uvicorn enterprise_rag.api.app:create_app --factory --reload
-```
-
-启动完成后访问：
+Swagger：
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-Swagger 中当前主要接口：
+接口：
 
 ```text
 GET /health
-
 GET /ready
-
 POST /api/v1/retrieve
-
 POST /api/v1/ask
 ```
 
----
-
-# 38. Example Ask
-
-示例：
-
-```json
-{
-  "query": "生成式人工智能服务处理训练数据需要遵守什么规定？",
-  "role": "guest"
-}
-```
-
-系统会：
+Heavy Runtime 在：
 
 ```text
-AccessContext
-↓
-ACL-aware Retrieval
-↓
-Hybrid Fusion
-↓
-Rerank
-↓
-Evidence Gate
-↓
-Evidence-Constrained Generation
-↓
-Citation Validation
+FastAPI Lifespan
 ```
 
-最终回答只允许基于 Knowledge Base Evidence。
+中初始化一次。
+
+不会每个 Request 都重新加载：
+
+```text
+BGE-M3
+Reranker
+BM25
+```
 
 ---
 
-# 39. Structured Refusal
+## 33.2 Start Streamlit Demo
 
-对于类似：
+另开终端：
 
-```text
-违法内容必须在几小时内处理？
+```powershell
+streamlit run demo/app.py
 ```
 
-如果法规 Evidence 只写：
+默认访问：
 
 ```text
-及时处理
+http://localhost:8501
 ```
 
-系统必须拒绝给出：
+Demo Client 通过 HTTP 调用 FastAPI：
 
 ```text
-24 小时
-48 小时
+Streamlit
+↓ HTTP
+FastAPI
+↓
+RAG Runtime
 ```
 
-等不存在于 Evidence 的具体数字。
-
-目标：
-
-```text
-不知道
-就明确说证据不足
-```
-
-而不是利用模型常识补全。
+而不会直接初始化第二套模型服务。
 
 ---
 
-# 40. Repository Structure
-
-当前主要目录：
+# 34. Repository Structure
 
 ```text
 enterprise-rag-compliance1/
@@ -2463,27 +2540,34 @@ enterprise-rag-compliance1/
 │   ├── raw/
 │   │
 │   ├── processed/
-│   │   └── chunks.jsonl
 │   │
 │   └── eval/
 │       ├── retrieval_eval_v1.jsonl
 │       ├── retrieval_eval_v2.jsonl
+│       ├── retrieval_eval_v3.jsonl
 │       └── results/
+│           ├── answer_eval_v3_run_001.jsonl
+│           └── answer_eval_v3_run_003.jsonl
+│
+├── demo/
+│   ├── api_client.py
+│   └── app.py
 │
 ├── docs/
-│   └── evaluation.md
+│   ├── evaluation.md
+│   └── images/
+│       ├── demo_qdrant_developer_answer.png
+│       ├── demo_qdrant_guest_acl_refusal.png
+│       └── demo_evidence_coverage_refusal.png
 │
 ├── scripts/
 │   ├── build_chunks.py
-│   ├── inspect_corpus.py
 │   ├── build_vector_index.py
+│   ├── download_enabled_documents.py
 │   ├── run_retrieval_eval.py
-│   ├── run_retrieval_latency_benchmark.py
-│   ├── run_interleaved_retrieval_latency_benchmark.py
 │   ├── run_answer_eval.py
-│   ├── run_targeted_citation_regression.py
-│   ├── analyze_answer_eval_snapshot.py
-│   ├── compare_answer_eval_snapshots.py
+│   ├── audit_evidence_gate_scores.py
+│   ├── run_interleaved_retrieval_latency_benchmark.py
 │   └── ...
 │
 ├── src/
@@ -2492,8 +2576,10 @@ enterprise-rag-compliance1/
 │       ├── api/
 │       ├── embeddings/
 │       ├── evaluation/
+│       ├── evidence/
 │       ├── generation/
 │       ├── ingestion/
+│       ├── llm/
 │       ├── reranking/
 │       ├── retrieval/
 │       ├── runtime/
@@ -2509,375 +2595,319 @@ enterprise-rag-compliance1/
 └── README.md
 ```
 
----
-
-# 41. Testing
-
-运行：
-
-```powershell
-pytest -v
-```
-
-项目当前测试覆盖：
-
-```text
-Manifest
-HTML Loader
-Normalization
-Regulation Parser
-Generic Section Parser
-Regulation Chunking
-Generic Section Chunking
-Corpus Validation
-Embedding
-Retrieval
-Hybrid Fusion
-Rerank
-ACL
-Evidence Gate
-Generation
-Citation
-FastAPI
-Evaluation
-Snapshot Persistence
-Regression
-```
-
-每次：
-
-```text
-Schema Evolution
-Corpus Expansion
-Retrieval Modification
-Prompt Modification
-```
-
-之后都应重新运行测试。
+> `data/raw/` 与 `data/processed/` 中的大量本地产物默认不提交 Git，可通过 Manifest 与 Ingestion Pipeline 重建。
 
 ---
 
-# 42. Current Design Conclusions
+# 35. Key Design Conclusions
 
-## Dense Retrieval
+## Dense
 
-当前 Corpus V2 上：
-
-```text
-Dense
-```
-
-是最强单阶段 Retrieval Baseline。
-
-尤其在：
-
-```text
-中文 Query
-→ 英文 OWASP / FastAPI
-```
-
-场景下，多语言 Dense Retrieval 明显优于纯 lexical BM25。
-
-当前不因为项目使用了 Hybrid Architecture，就刻意弱化 Dense Baseline。
+> BGE-M3 Dense 是当前中英混合 Corpus 上最稳定的基础 Retriever，并具有较好的中文 Query → 英文 Evidence 跨语言召回能力。
 
 ---
 
-## Hybrid Retrieval
+## Hybrid
 
-Hybrid Retrieval 不一定天然优于 Dense。
-
-Corpus V1 中已经观察到过 RRF 排名退化。
-
-Corpus V2 中，随着英文 OWASP / FastAPI 加入：
-
-```text
-BM25 Cross-lingual Lexical Mismatch
-```
-
-进一步导致：
-
-```text
-R021
-R022
-R023
-R027
-```
-
-出现：
-
-```text
-Dense Rank1
-↓
-RRF Rank2–4
-```
-
-因此：
-
-> Hybrid 的价值必须通过真实 Corpus Evaluation 验证，而不是仅凭架构复杂度判断。
+> Hybrid 不天然优于 Dense。Equal-weight RRF 虽然避免了直接比较 Dense / BM25 不同 Score Scale，但不会判断某个 Retriever 当前是否可靠；弱 BM25 分支可能污染 Fusion Ranking。
 
 ---
 
 ## Rerank
 
-Rerank 能够修复多个 Fusion Failure：
-
-```text
-R021
-R022
-R023
-R027
-```
-
-均恢复到：
-
-```text
-Gold Rank1
-```
-
-但当前 Hybrid + Rerank：
-
-```text
-质量仍未超过 Dense
-+
-Latency 成本明显更高
-```
-
-因此：
-
-> 是否始终开启 Rerank，应由 Quality × Latency Evaluation 决定，而不是因为“Rerank 看起来更高级”。
+> bge-reranker-v2-m3 能修复多起 RRF Rank Degradation，V3 MRR 从 0.8509 提升到 0.9259，但计算成本明显增加，而且 Single-Passage Relevance 提升不保证 Evidence-Set Coverage。
 
 ---
 
 ## ACL
 
-ACL 必须前置到 Retrieval Candidate Generation。
+> ACL 必须在 Candidate Generation 前执行，而不是 Retrieval 后过滤。相同 Query 在 developer / guest 下进入不同 Candidate Space，从检索源头实现权限隔离。
 
-不能：
+---
 
-```text
-先全库检索
-再过滤
-```
+## Evidence Gate
 
-这是当前系统的重要安全设计原则。
-
-另外：
-
-```text
-ACL Visibility
-```
-
-与：
-
-```text
-Answerability
-```
-
-不是同一个概念。
-
-“知识库中有答案，但当前用户无权访问”不能简单标记成普通 Hard Negative。
-
-后续将单独建立 ACL-specific Evaluation。
+> Rerank Relevance 与 Answerability 是不同任务。Coarse Gate 适合过滤明显无关 Query，但不能单独承担 Evidence Sufficiency 判断。
 
 ---
 
 ## Citation
 
-Retrieval Gold 和 Citation Gold 不应该混用。
-
-Citation 目标不是：
-
-```text
-引用越多越安全
-```
-
-也不是：
-
-```text
-引用越少越好
-```
-
-而是：
-
-```text
-Minimal Sufficient Evidence Set
-```
-
-Gold 也不能根据当前模型输出反向修改。
+> Retrieval Gold 与 Citation Gold 必须解耦。Citation 的目标不是越多越安全，而是找到能够完整支撑最终答案的 Minimal Sufficient Evidence Set。
 
 ---
 
 ## Evaluation
 
-RAG Optimization 不应依赖：
+> RAG Evaluation 不能只看一个 Accuracy。本项目分别评估 Corpus Coverage、Chunk Validity、Retrieval、ACL、Gate、Answer / Refusal 和 Citation，并通过冻结 Dataset 与 Snapshot 保存 Regression Evidence。
+
+---
+
+# 36. Engineering Lessons
+
+项目开发过程中实际遇到：
 
 ```text
-“看起来回答不错”
+Chunk Validation
+≠
+Manifest → Corpus Coverage
 ```
 
-而应该形成：
+```text
+Dataset 中保存 role
+≠
+Evaluation Harness 真正执行 role
+```
 
 ```text
-Metric
+LLM 被要求输出 JSON
+≠
+每次都满足 JSON Contract
+```
+
+```text
+有 Final Snapshot
+≠
+中途失败时已有昂贵推理结果不会丢
+```
+
+```text
+Retrieval Relevance
+≠
+Answerability
+```
+
+```text
+Single-Passage Relevance
+≠
+Evidence-Set Coverage
+```
+
+```text
+Retrieval Gold
+≠
+Citation Gold
+```
+
+```text
+Domain Model 允许 None
+≠
+API Response Schema 可以随意收窄为 str
+```
+
+这些 Failure 最终通过：
+
+```text
+Metric / Real Demo
 ↓
 Failure Case
 ↓
 Root Cause
 ↓
-Change
+Code / Architecture Change
 ↓
-Targeted Regression
+Regression Test
 ↓
-Full Re-evaluation
+Re-evaluation
 ```
 
-的闭环。
-
-另外应明确区分：
-
-```text
-Regression Benchmark
-```
-
-和：
-
-```text
-Current Capability Benchmark
-```
-
-避免 Corpus 扩展后失去历史对照。
+形成闭环。
 
 ---
 
-# 43. Current Limitations
+# 37. Current Limitations
 
-当前仍有明显限制：
+当前项目定位是：
 
-1. 当前 Corpus 只有 5 篇文档、104 个 Chunk，距离目标 30–80 篇文档仍有较大差距；
-2. 当前只引入 OWASP LLM01 Prompt Injection，尚未覆盖完整 OWASP Top 10 for LLM Applications；
-3. 尚未加入 Qdrant 官方技术文档；
-4. Retrieval Eval V2 只有 34 条，其中 Answerable Query 26 条，仍属于小型 Seed Evaluation；
-5. 当前 Retrieval Eval V2 尚未拆分独立 Development Set / Held-out Test Set，因此没有基于该 Dataset 调整 RRF 权重或 Retrieval 参数；
-6. 最新 Full-RAG Answer / Refusal / Citation Evaluation 仍基于 V1 的 20 条 Seed Cases，尚未完整扩展到 Retrieval Eval V2；
-7. Prompt v1 / v2 目前均主要基于单次 Full-RAG Snapshot 进行比较；
-8. 尚未完成独立 Answer Correctness 指标；
-9. 尚未完成完整 Faithfulness Evaluation；
-10. 尚未建立独立 ACL Unauthorized Retrieval Benchmark；
-11. 尚未进行正式并发 Load Test；
-12. API Role 目前只是 Demo Input，并非生产认证系统；
-13. Evaluation Gold 仍主要依赖人工 Source Audit；
-14. 当前 Generic Markdown-like Pipeline 面向文本型技术文档，尚未实现完整 Code-aware Chunking；
-15. 当前结果不可解释为生产环境准确率、可靠性保证或 SLA。
+```text
+单人可完成
+校招作品级
+企业 RAG 系统骨架
+```
+
+而不是大规模生产平台。
+
+主要限制：
+
+1. 当前 Corpus 为 28 篇、835 Chunk，仍远小于真实企业知识库；
+2. Final V3 只有 46 条 Evaluation Case；
+3. 尚未建立更大规模独立 Development Set + Held-out Test Set；
+4. Citation 仍存在一定 Over-Citation；
+5. R044 暴露了多证据问题中的 Evidence-Set Coverage 问题；
+6. 尚未建立独立 Answer Correctness 自动评测；
+7. 尚未完成系统化 Faithfulness Benchmark；
+8. 尚未进行正式高并发 API Load Test；
+9. 当前技术文档 ACL 属于模拟企业权限；
+10. API 中 `role` 仍是 Demo Input，并非生产身份认证；
+11. Streamlit Demo 为展示 Retrieval Evidence 会额外调用一次 `/retrieve`，因此当前 Demo 一次 Ask 会产生重复 Retrieval；
+12. Full-RAG latency 受网络与外部 LLM 服务影响；
+13. 当前实验结果不能解释为生产环境 SLA。
 
 ---
 
-# 44. Roadmap
+# 38. Roadmap
 
-后续计划：
+当前核心 RAG Pipeline、Evaluation、FastAPI 与 Demo UI 已基本完成。
+
+后续如果继续演进，重点包括：
 
 ```text
-更多 OWASP LLM Top 10
+独立 Development Set
 ↓
-Qdrant 官方技术文档
-↓
-更多公开 / 模拟内部规范
-↓
-30–80 Documents
-↓
-50–100 Evaluation Queries
-↓
-Development / Held-out Eval Split
-↓
-ACL-specific Evaluation
-↓
-More Hard Negatives
-↓
-Cross-document QA
-↓
-Full-RAG Evaluation V2
-↓
-Faithfulness
+新的 Held-out Evaluation
 ↓
 Answer Correctness
 ↓
-UI / Demo
+Faithfulness
+↓
+More ACL Negative Pairs
+↓
+Evidence-Set Coverage Improvement
+↓
+Citation Entailment / Pruning
+↓
+API Load Test
 ```
 
-Retrieval 参数优化只有在：
+未来如果优化：
+
+```text
+RRF Weight
+Retriever Weight
+TopK
+Reranker Strategy
+Evidence Selection
+Prompt
+```
+
+应该先建立：
 
 ```text
 Development Set
 +
-Held-out Evaluation
+新的 Held-out Test Set
 ```
 
-建立之后再进行，避免直接对当前 V2 Benchmark 过拟合。
+避免对当前冻结 V3 Benchmark 过拟合。
 
 ---
 
-# 45. Project Status
+# 39. Project Status
 
-当前已完成：
+已完成：
 
 ```text
-✅ Structured Regulation Ingestion
-✅ Heterogeneous Document Ingestion
-✅ Generic Section Parser
-✅ Section-aware Chunking
-✅ Unified KnowledgeChunk Schema
-✅ Corpus Validation
-✅ Corpus Inspection
-✅ OWASP LLM01 Ingestion
-✅ FastAPI Dependencies Ingestion
-✅ FastAPI Lifespan Ingestion
-✅ Corpus V2 / 104 Chunks
-✅ BGE-M3 Embedding
-✅ Qdrant
-✅ Qdrant Payload Metadata
-✅ Dense Retrieval
+✅ 28-document Heterogeneous Corpus
+✅ 835 KnowledgeChunks
+
+✅ Regulation Ingestion
+✅ OWASP LLM Top 10 Ingestion
+✅ FastAPI Documentation Ingestion
+✅ Qdrant Documentation Ingestion
+✅ Structure-aware Chunking
+✅ Manifest → Corpus Coverage Validation
+✅ Chunk Validation
+
+✅ BGE-M3 Dense Retrieval
 ✅ BM25 Retrieval
 ✅ RRF Hybrid Retrieval
-✅ bge-reranker
-✅ ACL-aware Retrieval
-✅ ACL Pre-filter Candidate Generation
-✅ Evidence Gate
+✅ bge-reranker-v2-m3
+✅ Qdrant Vector Store
+
+✅ Pre-Retrieval ACL
+✅ Role-aware Retrieval
+
+✅ Coarse Evidence Gate
 ✅ Evidence-Constrained Generation
 ✅ Structured Refusal
-✅ Citation Validation
+✅ Strict Structured Output Parser
+✅ Bounded Structured-output Retry
+✅ Deterministic Citation Validation
+
 ✅ FastAPI Runtime
-✅ Frozen Retrieval Eval V1
-✅ Retrieval Eval V2
-✅ Role-aware Retrieval Evaluation
-✅ Gold Integrity Check
-✅ Retrieval Failure Inspector
-✅ Retrieval Regression Evaluation
-✅ Query-level Interleaved Latency Benchmark
-✅ Answer / Refusal Evaluation V1
-✅ Citation Gold Audit
+✅ /health
+✅ /ready
+✅ /api/v1/retrieve
+✅ /api/v1/ask
+
+✅ Retrieval Eval V1 / V2 / V3
+✅ Retrieval Failure Analysis
+✅ Retrieval Latency Benchmark
+✅ Evidence Gate Audit
+✅ Full-RAG V3 Evaluation
+✅ Citation Evaluation
 ✅ Evaluation Snapshot Persistence
-✅ Prompt Regression Evaluation
+✅ Case-level Checkpoint / Resume
+✅ Evaluation Regression Tests
+
+✅ Technical-document API Nullability Regression Test
+
+✅ Streamlit Demo
+✅ Backend Readiness Display
+✅ Role Switching
+✅ Citation Inspector
+✅ Retrieval Evidence Inspector
+✅ ACL Same-query Demo
+✅ Evidence Sufficiency Refusal Demo
+
+✅ Final Evaluation Report
+✅ README Architecture Diagrams
+✅ Demo Screenshots
+✅ Example QA Showcase
 ```
 
-仍在继续：
+后续可继续：
 
 ```text
-🚧 More Corpus Expansion
-🚧 More OWASP Documents
-🚧 Qdrant Technical Documentation
-🚧 ACL-specific Evaluation
-🚧 Evaluation Dataset 50–100 Cases
-🚧 Held-out Evaluation Set
-🚧 Full-RAG Evaluation V2
+🚧 Independent Held-out Evaluation
 🚧 Answer Correctness
 🚧 Faithfulness
-🚧 Demo UI
+🚧 More ACL Negative Pairs
+🚧 Evidence-Set Coverage Improvement
+🚧 Citation Pruning
+🚧 API Load Test
 ```
 
 ---
 
-# 46. License / Data
+# 40. Evaluation Report
 
-当前知识库内容主要来自：
+完整 Evaluation Report：
+
+[docs/evaluation.md](docs/evaluation.md)
+
+其中记录：
+
+```text
+V1 / V2 / V3 Retrieval Metrics
+Retrieval Failure Analysis
+BM25 Cross-lingual Failure
+RRF Degradation
+Reranker Recovery
+Evidence Gate Audit
+ACL Same-query Case
+Citation Audit
+R044 Failure
+run_001 / run_002 / run_003 Experiment Lineage
+Checkpoint / Resume
+```
+
+README 主要保留：
+
+```text
+最终结果
+系统架构
+关键设计
+代表性 Failure
+Demo
+可复现命令
+```
+
+---
+
+# 41. Disclaimer
+
+知识库内容主要来自：
 
 ```text
 公开法规
@@ -2885,7 +2915,7 @@ Held-out Evaluation
 公开技术文档
 ```
 
-其中部分公开技术文档在项目中被人为赋予：
+部分公开技术文档在项目中被人为赋予：
 
 ```text
 developer
@@ -2893,12 +2923,13 @@ developer
 
 Access Level，仅用于模拟企业内部 ACL 场景。
 
-项目仅用于：
+本项目用于：
 
 ```text
 学习
 研究
 RAG 系统设计演示
+校招作品展示
 ```
 
 不构成法律意见。
